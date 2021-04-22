@@ -1,2 +1,3 @@
 # valo
-A flutter app for led control over wi-fi
+
+An app to control LEDs over Wi-Fi
