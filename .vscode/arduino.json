@@ -1,6 +1,0 @@
-{
-    "configuration": "CpuFrequency=80,FlashSize=4M1M,LwIPVariant=v2mss536,Debug=Disabled,DebugLevel=None____,UploadSpeed=115200",
-    "board": "esp8266:esp8266:nodemcuv2",
-    "sketch": "esp8266\\valo\\valo.ino",
-    "port": "COM5"
-}

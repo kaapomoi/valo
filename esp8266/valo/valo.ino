@@ -2,10 +2,21 @@
 #include <WiFiClient.h>
 #include <ESP8266WebServer.h>
 #include <ESP8266mDNS.h>
+#define FASTLED_ESP8266_NODEMCU_PIN_ORDER
 #include "FastLED.h"
 
-const char* ssid = "ASUSDSL";
-const char* password = "ledcontrol";
+
+
+
+#include "secret.h"
+
+#ifndef SSID
+#define SSID "NOT_VALID"
+#define PASS "NOT_VALID"
+#endif
+
+const char* ssid = SSID;
+const char* password = PASS;
 
 const double max_brightness = 256*3 - 1;
 const double min_brightness = 80;
@@ -13,9 +24,7 @@ const double min_brightness = 80;
 //data pin d7
 //clock pin d5
 
-#define DATA_PIN    7
-#define CLOCK_PIN   5
-#define NUM_LEDS    60
+#define NUM_LEDS 60
 CRGB leds[NUM_LEDS];
 
 #define FRAMES_PER_SECOND 30
@@ -34,7 +43,15 @@ ESP8266WebServer server(80);
 void handleRoot() {
 
   // Create a webpage
-  String content = "<html><title>' Illuminou$ _./ Iridescence !*</title>";
+  String content;
+  content.reserve(8192);
+
+  content += "HTTP/1.1 200 OK\r\n";
+  content += "Content-Type: text/html\r\n";
+  content += "Connection: close\r\n";  // the connection will be closed after completion of the response
+  content += "Refresh: 5\r\n";       // refresh the page automatically every 5 sec
+  content += "\r\n";
+  content += "<!DOCTYPE HTML><html><title>HOME-OHJAIN</title>";
 
   // Really lightweight impl. of bootstrap
   content += "<head> <meta charset='utf-8'> <meta name='viewport' content='width=device-width, initial-scale=1, shrink-to-fit=no'> <style>.h-0{height:0}.btn-green{background-color:#DDD;padding:4%!important}.btn-green:hover{background-color:#FFF}.btn{border-radius:0px!important}#randomButton{background-color:#151515;background-position:center 20%;background-size:contain;background-repeat:no-repeat;opacity:65%}#randomButton:hover{opacity:85%}#sparkleButton{background:url(http://eero.dclabra.fi/~ttv18skaapom/II_stars.png);background-color:#aaa;background-position:center;background-size:contain;background-repeat:no-repeat;opacity:65%}#sparkleButton:hover{opacity:85%}.row-3rd{height:33.3333vh}.row-6th{height:16.666666vh}.m-v-c{margin-top:auto;margin-bottom:auto}.o-0{opacity:0%}.o-25{opacity:25%}.o-50{opacity:50%}.o-75{opacity:75%}.o-100{opacity:100%}";
@@ -114,11 +131,14 @@ void handleColorChange()
 void handleModeChange(){
 
   String m = server.arg("mode");
-  Serial.println("mode from ahndle mode change: " + String(m));
+  Serial.println("mode from handle mode change: " + String(m));
   led_mode = m.toInt();
 }
 
 void setup(void) {
+  const int DATA_PIN = 7;
+  const int CLOCK_PIN = 5;
+  
   // second of delay if something goes wrong, idk
   delay(1000);
   
@@ -130,6 +150,7 @@ void setup(void) {
   Serial.println("");
 
   // Create LED "strip" object
+
   FastLED.addLeds<APA102, DATA_PIN, CLOCK_PIN, BGR>(leds, NUM_LEDS);
 
   FastLED.setBrightness(255);
@@ -158,7 +179,7 @@ void setup(void) {
   const char * headerkeys[] = {"User-Agent", "Cookie"} ;
   size_t headerkeyssize = sizeof(headerkeys) / sizeof(char*);
   //ask server to track these headers
-  server.collectHeaders(headerkeys, headerkeyssize );
+  server.collectHeaders(headerkeys, headerkeyssize);
   server.begin();
   Serial.println("HTTP server started");
   prev_time = millis();

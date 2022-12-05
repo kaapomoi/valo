@@ -1,29 +1,41 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
-import 'package:random_color/random_color.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:simple_gesture_detector/simple_gesture_detector.dart';
 
-void main() => runApp(MaterialApp(home: MyApp()));
+void main() => runApp(const MaterialApp(home: MyApp()));
 
 class MyApp extends StatefulWidget {
+  const MyApp({super.key});
+
   @override
+  // ignore: library_private_types_in_public_api
   _MyAppState createState() => _MyAppState();
 }
 
 class _MyAppState extends State<MyApp> {
   List<Color> generatedColors = <Color>[];
   int lightingMode = 1;
-  final List<ColorHue> _hueType = <ColorHue>[
-    ColorHue.green,
-    ColorHue.red,
-    ColorHue.pink,
-    ColorHue.purple,
-    ColorHue.blue,
-    ColorHue.yellow,
-    ColorHue.orange
-  ];
-  ColorBrightness _colorLuminosity = ColorBrightness.random;
-  ColorSaturation _colorSaturation = ColorSaturation.random;
+  String ip = "192.168.50.10:80";
+  var mySystemTheme = SystemUiOverlayStyle.light
+      .copyWith(systemNavigationBarColor: Colors.deepPurple);
+
+  /// Text controller
+  late TextEditingController controller;
+  @override
+  void initState() {
+    super.initState();
+    controller = TextEditingController();
+    controller.text = ip;
+  }
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
 
   void _onHorizontalSwipe(SwipeDirection direction) {
     _updateColor();
@@ -39,39 +51,73 @@ class _MyAppState extends State<MyApp> {
         lightingMode = 1;
       });
     }
-    Uri ur =
-        Uri.http("192.168.1.10:80", "/mode", {"mode": lightingMode.toString()});
+    Uri ur = Uri.http(ip, "/mode", {"mode": lightingMode.toString()});
     http.get(ur);
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Container(
-        child: SimpleGestureDetector(
-          child: _showColors(),
-          onHorizontalSwipe: _onHorizontalSwipe,
-          swipeConfig: SimpleSwipeConfig(
-            verticalThreshold: 40.0,
-            horizontalThreshold: 40.0,
-            swipeDetectionBehavior: SwipeDetectionBehavior.continuousDistinct,
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: mySystemTheme,
+      child: Scaffold(
+        body: Container(
+          decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                  begin: Alignment.topRight,
+                  end: Alignment.bottomLeft,
+                  stops: [
+                0.1,
+                0.3,
+                0.5,
+                0.7,
+                0.9,
+              ],
+                  colors: [
+                Colors.red,
+                Colors.amber,
+                Colors.lightGreen,
+                Colors.blueGrey,
+                Colors.deepPurple,
+              ])),
+          child: SimpleGestureDetector(
+            onHorizontalSwipe: _onHorizontalSwipe,
+            swipeConfig: const SimpleSwipeConfig(
+              verticalThreshold: 40.0,
+              horizontalThreshold: 40.0,
+              swipeDetectionBehavior: SwipeDetectionBehavior.continuousDistinct,
+            ),
+            child: _showColors(),
           ),
         ),
-      ),
-      floatingActionButton: Column(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: <Widget>[
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8.0),
-            child: FloatingActionButton(
-              tooltip: 'Toggle blinking effect',
-              child: lightingMode == 1
-                  ? new Icon(Icons.scatter_plot)
-                  : new Icon(Icons.lightbulb),
-              onPressed: _toggleLightingMode,
+        floatingActionButton: Column(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: <Widget>[
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8.0),
+              child: FloatingActionButton(
+                backgroundColor: Colors.white.withAlpha(100),
+                tooltip: 'Toggle blinking effect',
+                onPressed: _toggleLightingMode,
+                child: lightingMode == 1
+                    ? const Icon(Icons.scatter_plot_sharp)
+                    : const Icon(Icons.lightbulb),
+              ),
             ),
-          ),
-        ],
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8.0),
+              child: FloatingActionButton(
+                backgroundColor: Colors.white.withAlpha(100),
+                tooltip: 'Change target IP address',
+                onPressed: () async {
+                  final newIp = await openIpChangeDialog();
+                  if (newIp == null || newIp.isEmpty) return;
+                  setState(() => this.ip = newIp);
+                },
+                child: const Icon(Icons.wifi_sharp),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -82,67 +128,45 @@ class _MyAppState extends State<MyApp> {
           const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3),
       shrinkWrap: true,
       itemBuilder: (BuildContext context, int index) {
-        Color _color;
+        Color color;
 
         if (generatedColors.length > index) {
-          _color = generatedColors[index];
+          color = generatedColors[index];
         } else {
-          _color = RandomColor().randomColor(
-              colorHue: ColorHue.multiple(colorHues: _hueType),
-              colorSaturation: _colorSaturation,
-              colorBrightness: _colorLuminosity);
+          Random random = Random();
+          color = Color.fromRGBO(
+              random.nextInt(255), random.nextInt(255), random.nextInt(255), 1);
 
-          generatedColors.add(_color);
-        }
-
-        Color getTextColor() {
-          if (_color.computeLuminance() > 0.3) {
-            return Colors.black;
-          } else {
-            return Colors.white;
-          }
+          generatedColors.add(color);
         }
 
         return InkWell(
           onTap: () {
             var colorStr =
-                _color.value.toRadixString(16).substring(2).toUpperCase();
-            Uri ur = Uri.http("192.168.1.10:80", "/color", {"color": colorStr});
+                color.value.toRadixString(16).substring(2).toUpperCase();
+            Uri ur = Uri.http(ip, "/color", {"color": colorStr});
             http.get(ur);
-            print("${_color.red}, "
-                "${_color.blue}, "
-                "${_color.green}");
           },
           child: Card(
-            color: _color,
-            child: Container(
-              margin: const EdgeInsets.all(8.0),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: <Widget>[
-                  Container(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      getColorNameFromColor(_color).getName,
-                      style: Theme.of(context)
-                          .textTheme
-                          .headline6
-                          ?.copyWith(fontSize: 13.0, color: getTextColor()),
-                    ),
-                  ),
-                  Container(
-                    alignment: Alignment.centerRight,
-                    child: Text(
-                      '#${_color.value.toRadixString(16).toUpperCase().substring(2)}',
-                      style: Theme.of(context).textTheme.caption?.copyWith(
-                          color: getTextColor(),
-                          fontSize: 16.0,
-                          fontWeight: FontWeight.w300),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            color: color,
+            // child: Container(
+            //   margin: const EdgeInsets.all(8.0),
+            //   child: Column(
+            //     mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            //     children: <Widget>[
+            //       Container(
+            //         alignment: Alignment.centerRight,
+            //         child: Text(
+            //           '#${color.value.toRadixString(16).toUpperCase().substring(2)}',
+            //           style: Theme.of(context).textTheme.caption?.copyWith(
+            //               color: getTextColor(),
+            //               fontSize: 16.0,
+            //               fontWeight: FontWeight.w300),
+            //         ),
+            //       ),
+            //     ],
+            //   ),
+            // ),
           ),
         );
       },
@@ -154,8 +178,24 @@ class _MyAppState extends State<MyApp> {
       generatedColors.clear();
     });
   }
-}
 
-typedef HueTypeChange = void Function(List<ColorHue> colorHues);
-typedef SaturationTypeChange = void Function(ColorSaturation colorSaturation);
-typedef LuminosityTypeChange = void Function(ColorBrightness colorBrightness);
+  Future<String?> openIpChangeDialog() => showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+            title: const Text("Target IP address"),
+            content: TextField(
+              autofocus: true,
+              decoration: const InputDecoration(hintText: "Insert IP and port"),
+              controller: controller,
+              onSubmitted: (_) => submitNewIpAddress(),
+            ),
+            actions: [
+              TextButton(
+                  onPressed: submitNewIpAddress, child: const Text("Apply"))
+            ],
+          ));
+
+  void submitNewIpAddress() {
+    Navigator.of(context).pop(controller.text);
+  }
+}
