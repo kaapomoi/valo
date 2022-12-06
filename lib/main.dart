@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:http/http.dart' as http;
 import 'package:simple_gesture_detector/simple_gesture_detector.dart';
 
@@ -19,8 +20,10 @@ class _MyAppState extends State<MyApp> {
   List<Color> generatedColors = <Color>[];
   int lightingMode = 1;
   String ip = "192.168.50.10:80";
-  var mySystemTheme = SystemUiOverlayStyle.light
-      .copyWith(systemNavigationBarColor: Colors.deepPurple);
+  var mySystemTheme = SystemUiOverlayStyle.light.copyWith(
+      systemNavigationBarColor: const Color.fromARGB(0, 255, 255, 255));
+
+  Color pickerColor = const Color(0xffffeedd);
 
   /// Text controller
   late TextEditingController controller;
@@ -51,8 +54,15 @@ class _MyAppState extends State<MyApp> {
         lightingMode = 1;
       });
     }
-    Uri ur = Uri.http(ip, "/mode", {"mode": lightingMode.toString()});
-    http.get(ur);
+    Uri ur = Uri.http(ip, "/api/v1/basic");
+    http.post(ur, body: "{ 'mode': ${lightingMode.toString()} }");
+  }
+
+  void sendTestApiRequest() {
+    Uri ur = Uri.http(ip, "/api/v1/multi");
+    http.post(ur,
+        body: "{ \"colors\": [\"aa00bb\", \"00ffff\", \"dddd00\", \"00ffff\","
+            " \"aa00bb\"], \"mode\": 3, \"brightness\": 55 }");
   }
 
   @override
@@ -62,23 +72,25 @@ class _MyAppState extends State<MyApp> {
       child: Scaffold(
         body: Container(
           decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                  begin: Alignment.topRight,
-                  end: Alignment.bottomLeft,
-                  stops: [
+            gradient: LinearGradient(
+              begin: Alignment.topRight,
+              end: Alignment.bottomLeft,
+              stops: [
                 0.1,
                 0.3,
-                0.5,
-                0.7,
-                0.9,
+                0.4,
+                0.6,
+                0.8,
               ],
-                  colors: [
-                Colors.red,
-                Colors.amber,
-                Colors.lightGreen,
-                Colors.blueGrey,
-                Colors.deepPurple,
-              ])),
+              colors: [
+                Color.fromARGB(255, 255, 131, 122),
+                Color.fromARGB(255, 184, 156, 72),
+                Color.fromARGB(255, 154, 199, 103),
+                Color.fromARGB(255, 89, 141, 167),
+                Color.fromARGB(255, 13, 6, 53),
+              ],
+            ),
+          ),
           child: SimpleGestureDetector(
             onHorizontalSwipe: _onHorizontalSwipe,
             swipeConfig: const SimpleSwipeConfig(
@@ -86,7 +98,22 @@ class _MyAppState extends State<MyApp> {
               horizontalThreshold: 40.0,
               swipeDetectionBehavior: SwipeDetectionBehavior.continuousDistinct,
             ),
-            child: _showColors(),
+            child: ShaderMask(
+                shaderCallback: (Rect rect) {
+                  return const LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Color.fromARGB(172, 0, 0, 0),
+                      Colors.transparent,
+                      Colors.transparent,
+                      Color.fromARGB(172, 0, 0, 0)
+                    ],
+                    stops: [0.0, 0.15, 0.85, 1.0],
+                  ).createShader(rect);
+                },
+                blendMode: BlendMode.dstOut,
+                child: _showColors()),
           ),
         ),
         floatingActionButton: Column(
@@ -111,9 +138,27 @@ class _MyAppState extends State<MyApp> {
                 onPressed: () async {
                   final newIp = await openIpChangeDialog();
                   if (newIp == null || newIp.isEmpty) return;
-                  setState(() => this.ip = newIp);
+                  setState(() => ip = newIp);
                 },
                 child: const Icon(Icons.wifi_sharp),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8.0),
+              child: FloatingActionButton(
+                backgroundColor: Colors.white.withAlpha(100),
+                tooltip: 'Open Color Picker Dialog',
+                onPressed: openColorPickerDialog,
+                child: const Icon(Icons.color_lens_sharp),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8.0),
+              child: FloatingActionButton(
+                backgroundColor: Colors.white.withAlpha(100),
+                tooltip: 'Test Color API',
+                onPressed: sendTestApiRequest,
+                child: const Icon(Icons.api),
               ),
             ),
           ],
@@ -144,29 +189,11 @@ class _MyAppState extends State<MyApp> {
           onTap: () {
             var colorStr =
                 color.value.toRadixString(16).substring(2).toUpperCase();
-            Uri ur = Uri.http(ip, "/color", {"color": colorStr});
-            http.get(ur);
+            Uri ur = Uri.http(ip, "/api/v1/basic");
+            http.post(ur, body: "{ 'color': '$colorStr' }");
           },
           child: Card(
             color: color,
-            // child: Container(
-            //   margin: const EdgeInsets.all(8.0),
-            //   child: Column(
-            //     mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            //     children: <Widget>[
-            //       Container(
-            //         alignment: Alignment.centerRight,
-            //         child: Text(
-            //           '#${color.value.toRadixString(16).toUpperCase().substring(2)}',
-            //           style: Theme.of(context).textTheme.caption?.copyWith(
-            //               color: getTextColor(),
-            //               fontSize: 16.0,
-            //               fontWeight: FontWeight.w300),
-            //         ),
-            //       ),
-            //     ],
-            //   ),
-            // ),
           ),
         );
       },
@@ -179,21 +206,51 @@ class _MyAppState extends State<MyApp> {
     });
   }
 
-  Future<String?> openIpChangeDialog() => showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-            title: const Text("Target IP address"),
-            content: TextField(
-              autofocus: true,
-              decoration: const InputDecoration(hintText: "Insert IP and port"),
-              controller: controller,
-              onSubmitted: (_) => submitNewIpAddress(),
+  void openColorPickerDialog() => showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text("Pick a color"),
+          content: SingleChildScrollView(
+            child: ColorPicker(
+              pickerColor: pickerColor,
+              onColorChanged: (Color value) {
+                setState(() => pickerColor = value);
+              },
             ),
-            actions: [
-              TextButton(
-                  onPressed: submitNewIpAddress, child: const Text("Apply"))
-            ],
-          ));
+          ),
+          actions: <Widget>[
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                var pickerColorStr = pickerColor.value
+                    .toRadixString(16)
+                    .substring(2)
+                    .toUpperCase();
+                Uri ur = Uri.http(ip, "/api/v1/basic");
+                http.post(ur, body: "{ 'color': '$pickerColorStr' }");
+              },
+              child: const Text("Apply"),
+            ),
+          ],
+        ),
+      );
+
+  Future<String?> openIpChangeDialog() => showDialog<String>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text("Target IP address"),
+          content: TextField(
+            autofocus: true,
+            decoration: const InputDecoration(hintText: "Insert IP and port"),
+            controller: controller,
+            onSubmitted: (_) => submitNewIpAddress(),
+          ),
+          actions: [
+            TextButton(
+                onPressed: submitNewIpAddress, child: const Text("Apply"))
+          ],
+        ),
+      );
 
   void submitNewIpAddress() {
     Navigator.of(context).pop(controller.text);

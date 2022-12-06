@@ -2,11 +2,9 @@
 #include <WiFiClient.h>
 #include <ESP8266WebServer.h>
 #include <ESP8266mDNS.h>
+#include <ArduinoJson.h>
 #define FASTLED_ESP8266_NODEMCU_PIN_ORDER
 #include "FastLED.h"
-
-
-
 
 #include "secret.h"
 
@@ -21,9 +19,6 @@ const char* password = PASS;
 const double max_brightness = 256*3 - 1;
 const double min_brightness = 80;
 
-//data pin d7
-//clock pin d5
-
 #define NUM_LEDS 60
 CRGB leds[NUM_LEDS];
 
@@ -33,24 +28,30 @@ unsigned long cur_time = 0;
 unsigned long prev_time = 0;
 unsigned long frame_time = ceil((float) 1000 / (float) FRAMES_PER_SECOND);
 
+/// Gradient change mode variables
+unsigned long gradient_color_index{0};
+CRGBPalette256 gradient_palette;
+
+/// Used in basic color modes 
 CRGB current_color;
-int current_hue = 0;
-uint8_t brightness = 255;
-uint8_t led_mode = 1;
+
+enum class LedMode :uint8_t {
+  off = 0,
+  solid = 1,
+  sparkle = 2,
+  gradient_change = 3
+};
+
+LedMode led_mode{LedMode::off};
 
 ESP8266WebServer server(80);
 
 void handleRoot() {
 
   // Create a webpage
-  String content;
+  static String content;
   content.reserve(8192);
-
-  content += "HTTP/1.1 200 OK\r\n";
-  content += "Content-Type: text/html\r\n";
-  content += "Connection: close\r\n";  // the connection will be closed after completion of the response
-  content += "Refresh: 5\r\n";       // refresh the page automatically every 5 sec
-  content += "\r\n";
+ 
   content += "<!DOCTYPE HTML><html><title>HOME-OHJAIN</title>";
 
   // Really lightweight impl. of bootstrap
@@ -102,43 +103,127 @@ void handleRoot() {
   server.send(200, "text/html", content);
 }
 
-void handleColorChange()
-{
-  Serial.println(server.arg("color"));
-  
-  // Receive color from webpage
-  String col = server.arg("color");
-  long number = (long) strtol( &col[0], NULL, 16);
+CRGB getColorFromHex(String hex){
+  long number = (long) strtol( &hex[0], NULL, 16);
   uint8_t red = (number >> 16 & 0xFF);
   uint8_t green = (number >> 8 & 0xFF);
   uint8_t blue = (number & 0xFF);
-
-  // Calculate real percentual brightness
-  double r_b = (red + green + blue) / max_brightness;
-  
-  Serial.println("real brightness: " + String(r_b));
-
-  // Construct an RgbColor for the LEDs
-  //RgbColor netcolor(red * r_b, green * r_b, blue * r_b);
-  current_color = CRGB(red * r_b, green * r_b, blue * r_b);
-  brightness = floor(r_b * 255);
-
-  Serial.println(red);
-  Serial.println(green);
-  Serial.println(blue);
+  return CRGB(red, green, blue);
 }
 
-void handleModeChange(){
+std::vector<uint8_t> getColorBytesFromHex(String hex){
+  long number = (long) strtol( &hex[0], NULL, 16);
+  uint8_t red = (number >> 16 & 0xFF);
+  uint8_t green = (number >> 8 & 0xFF);
+  uint8_t blue = (number & 0xFF);
+  return std::vector<uint8_t>{red, green, blue};
+}
 
-  String m = server.arg("mode");
-  Serial.println("mode from handle mode change: " + String(m));
-  led_mode = m.toInt();
+/// Returns whether the request has a valid body.
+bool checkIncomingRequest(){
+  if (!server.hasArg("plain")){
+    Serial.println("No body in request");
+    server.send(400, "text/plain", "No body in request");
+    return false;
+  }
+  return true;
+}
+
+void handleColorApiV1Basic(){
+  if (!checkIncomingRequest()){
+    return;
+  }
+
+  String const message{server.arg("plain")};
+
+  Serial.println("/api/v1/basic got message: " + message);
+  
+  StaticJsonDocument<96> doc;
+
+  DeserializationError error = deserializeJson(doc, message);
+  
+  if (error) {
+    Serial.print(F("deserializeJson() failed: "));
+    Serial.println(error.f_str());
+    return;
+  }
+
+  /// Handle each input individually
+  if (doc["color"] != nullptr){
+    String color = doc["color"];
+    current_color = getColorFromHex(color);
+  }
+
+  if (doc["mode"] != nullptr){
+    int mode = doc["mode"];
+    led_mode = LedMode{mode};
+  }
+
+  if (doc["brightness"] != nullptr){
+    int brightness = doc["brightness"];
+    FastLED.setBrightness(brightness);
+  }
+
+  server.send(200, "text/plain", "Mode change OK.");
+}
+
+void handleColorApiV1Multi(){
+  if (!checkIncomingRequest()){
+    return;
+  }
+
+  String const message{server.arg("plain")};
+
+  Serial.println("/api/v1/multi got message: " + message);
+
+  StaticJsonDocument<1024> doc;
+
+  DeserializationError error = deserializeJson(doc, message);
+  
+  if (error) {
+    Serial.print(F("deserializeJson() failed: "));
+    Serial.println(error.f_str());
+  }
+
+  if (doc["colors"] != nullptr){
+    JsonArray c = doc["colors"];
+    
+    uint8_t color_index{0};
+    uint8_t index_per_color{256 / (c.size() - 1)};
+
+    std::vector<uint8_t> colors(c.size(), 0); 
+    for (JsonVariant color_hex : c){
+      colors.push_back(color_index); 
+      std::vector<uint8_t> color_bytes{getColorBytesFromHex(color_hex)};
+
+      colors.insert(colors.end(), color_bytes.begin(), color_bytes.end()); 
+      Serial.println("Pushed a color " + String(color_index));
+      color_index += index_per_color;
+    }
+    /// Ensure last index is 255
+    colors.at(colors.size() - 4) = 255; 
+
+
+    gradient_palette.loadDynamicGradientPalette(colors.data());
+  }
+
+  if (doc["speed"] != nullptr){
+    int speed = doc["speed"];
+  }
+
+  if (doc["brightness"] != nullptr){
+    int brightness = doc["brightness"];
+  }
+
+  led_mode = LedMode::gradient_change;
+
+  server.send(200, "text/plain", "Multi color change OK.");
 }
 
 void setup(void) {
   const int DATA_PIN = 7;
   const int CLOCK_PIN = 5;
-  
+
   // second of delay if something goes wrong, idk
   delay(1000);
   
@@ -153,7 +238,7 @@ void setup(void) {
 
   FastLED.addLeds<APA102, DATA_PIN, CLOCK_PIN, BGR>(leds, NUM_LEDS);
 
-  FastLED.setBrightness(255);
+  FastLED.setBrightness(200);
 
   // Wait for connection
   while (WiFi.status() != WL_CONNECTED) {
@@ -168,8 +253,11 @@ void setup(void) {
 
   // Initialize server routings
   server.on("/", handleRoot);
-  server.on("/color", HTTP_GET, handleColorChange);
-  server.on("/mode", HTTP_GET, handleModeChange);
+  server.on("/api/v1/basic", HTTP_POST, handleColorApiV1Basic);
+  server.on("/api/v1/multi", HTTP_POST, handleColorApiV1Multi);
+  server.onNotFound([](){
+    server.send(404, "text/plain", "404: Not found. Try to POST on /api/v1");
+  });
 
   if(MDNS.begin("valo")){
     Serial.println("MDNS Service started");
@@ -185,26 +273,38 @@ void setup(void) {
   prev_time = millis();
 }
 
-void update_leds(){
-  if(led_mode == 1){
-    for( int i = 0; i < NUM_LEDS; i++) {
-      leds[i] = current_color;
+void updateLeds(){
+  switch (led_mode){
+    case LedMode::off:
+    {
+
+      break;
+    } 
+    case LedMode::solid:
+    {
+      for( int i = 0; i < NUM_LEDS; i++) {
+        leds[i] = current_color;
+      }
+      break;
     }
-  }
-  else if(led_mode == 2){
-    fadeToBlackBy( leds, NUM_LEDS, 10);
-    int pos = random8(NUM_LEDS);
-    leds[pos] += current_color + CRGB(random8(32),random8(32),random8(32));
-  }
-  
-  Serial.println("leds[0]: " + String(leds[0].r) + "," + String(leds[0].g) + "," + String(leds[0].b));
-  Serial.println("brightness: " + String(brightness));
-  
-  // If we dont want black, get atleast some color
-  if((current_color.r + current_color.g + current_color.b) > 1) {
-    FastLED.setBrightness(brightness + min_brightness);
-  } else {
-    FastLED.setBrightness(brightness);
+    case LedMode::sparkle:
+    {
+      fadeToBlackBy( leds, NUM_LEDS, 10);
+      int pos = random8(NUM_LEDS);
+      leds[pos] += current_color + CRGB(random8(32),random8(32),random8(32));
+      break;
+    }
+    case LedMode::gradient_change:
+    {
+      for(int i = 0; i < NUM_LEDS; i++){
+        leds[i] = ColorFromPalette(gradient_palette, gradient_color_index, 255, LINEARBLEND);
+      }
+      gradient_color_index += 1;
+      break;
+    }
+    default: {
+      break;
+    }
   }
   
   FastLED.show();
@@ -212,18 +312,14 @@ void update_leds(){
 
 void loop(void) {
   server.handleClient();
-  // Debug
 
-  // Async LED updates:
-  EVERY_N_MILLISECONDS(frame_time){
-    //update_leds();
-  };
-  
   // Caveman impl.
-  if((millis() - prev_time) >= frame_time){
+  if(led_mode == LedMode::off) {
+    FastLED.clear(true);
+  }
+  else if((millis() - prev_time) >= frame_time){
     prev_time = millis();
     // Update LEDs
-    update_leds();
+    updateLeds();
   }
-  
 }
