@@ -161,6 +161,18 @@ class _MyAppState extends State<MyApp> {
                 child: const Icon(Icons.api),
               ),
             ),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8.0),
+              child: FloatingActionButton(
+                backgroundColor: Colors.white.withAlpha(100),
+                tooltip: 'Turn LEDs Off',
+                onPressed: () {
+                  Uri ur = Uri.http(ip, "/api/v1/basic");
+                  http.post(ur, body: "{ \"mode\": 0 }");
+                },
+                child: const Icon(Icons.power_off_sharp),
+              ),
+            ),
           ],
         ),
       ),
