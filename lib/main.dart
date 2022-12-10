@@ -17,6 +17,8 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
+  bool brightnessSliderVisible = false;
+  int brightness = 255;
   List<Color> generatedColors = <Color>[];
   int lightingMode = 1;
   String ip = "192.168.50.10:80";
@@ -77,17 +79,17 @@ class _MyAppState extends State<MyApp> {
               end: Alignment.bottomLeft,
               stops: [
                 0.1,
-                0.3,
-                0.4,
-                0.6,
+                0.2,
+                0.35,
+                0.55,
                 0.8,
               ],
               colors: [
-                Color.fromARGB(255, 255, 131, 122),
-                Color.fromARGB(255, 184, 156, 72),
-                Color.fromARGB(255, 154, 199, 103),
-                Color.fromARGB(255, 89, 141, 167),
-                Color.fromARGB(255, 13, 6, 53),
+                Color.fromARGB(255, 182, 162, 161),
+                Color.fromARGB(255, 209, 188, 125),
+                Color.fromARGB(255, 179, 105, 124),
+                Color.fromARGB(255, 141, 177, 196),
+                Color.fromARGB(255, 44, 36, 88),
               ],
             ),
           ),
@@ -116,12 +118,14 @@ class _MyAppState extends State<MyApp> {
                 child: _showColors()),
           ),
         ),
-        floatingActionButton: Column(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: <Widget>[
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8.0),
-              child: FloatingActionButton(
+        floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+        floatingActionButton: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 21.9),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: <Widget>[
+              FloatingActionButton(
                 backgroundColor: Colors.white.withAlpha(100),
                 tooltip: 'Toggle blinking effect',
                 onPressed: _toggleLightingMode,
@@ -129,41 +133,29 @@ class _MyAppState extends State<MyApp> {
                     ? const Icon(Icons.scatter_plot_sharp)
                     : const Icon(Icons.lightbulb),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8.0),
-              child: FloatingActionButton(
-                backgroundColor: Colors.white.withAlpha(100),
-                tooltip: 'Change target IP address',
-                onPressed: () async {
-                  final newIp = await openIpChangeDialog();
-                  if (newIp == null || newIp.isEmpty) return;
-                  setState(() => ip = newIp);
-                },
-                child: const Icon(Icons.wifi_sharp),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8.0),
-              child: FloatingActionButton(
+              // FloatingActionButton(
+              //   backgroundColor: Colors.white.withAlpha(100),
+              //   tooltip: 'Change target IP address',
+              //   onPressed: () async {
+              //     final newIp = await openIpChangeDialog();
+              //     if (newIp == null || newIp.isEmpty) return;
+              //     setState(() => ip = newIp);
+              //   },
+              //   child: const Icon(Icons.wifi_sharp),
+              // ),
+              FloatingActionButton(
                 backgroundColor: Colors.white.withAlpha(100),
                 tooltip: 'Open Color Picker Dialog',
                 onPressed: openColorPickerDialog,
                 child: const Icon(Icons.color_lens_sharp),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8.0),
-              child: FloatingActionButton(
+              FloatingActionButton(
                 backgroundColor: Colors.white.withAlpha(100),
                 tooltip: 'Test Color API',
                 onPressed: sendTestApiRequest,
                 child: const Icon(Icons.api),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8.0),
-              child: FloatingActionButton(
+              FloatingActionButton(
                 backgroundColor: Colors.white.withAlpha(100),
                 tooltip: 'Turn LEDs Off',
                 onPressed: () {
@@ -172,8 +164,59 @@ class _MyAppState extends State<MyApp> {
                 },
                 child: const Icon(Icons.power_off_sharp),
               ),
-            ),
-          ],
+              Column(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Visibility(
+                    visible: !brightnessSliderVisible,
+                    child: FloatingActionButton(
+                      backgroundColor: Colors.white.withAlpha(100),
+                      tooltip: 'Change brightness',
+                      onPressed: () {
+                        // Get brightness
+                        Uri ur = Uri.http(ip, "/api/v1/basic/brightness");
+                        http.get(ur);
+                        // Spawn slider
+                        setState(() {
+                          brightnessSliderVisible = true;
+                        });
+                      },
+                      child: const Icon(Icons.brightness_1),
+                    ),
+                  ),
+                  Visibility(
+                    visible: brightnessSliderVisible,
+                    child: SizedBox(
+                      width: 56.0,
+                      height: MediaQuery.of(context).size.height / 3,
+                      child: RotatedBox(
+                        quarterTurns: 3,
+                        child: Slider(
+                          activeColor: Colors.white.withAlpha(100),
+                          thumbColor: Colors.white.withAlpha(200),
+                          inactiveColor: Colors.white.withAlpha(50),
+                          min: 0,
+                          max: 255,
+                          value: brightness.toDouble(),
+                          onChanged: ((value) =>
+                              setState(() => brightness = value.toInt())),
+                          onChangeEnd: (newValue) => {
+                            setState(() {
+                              brightnessSliderVisible = false;
+
+                              Uri ur = Uri.http(ip, "/api/v1/basic");
+                              http.post(ur,
+                                  body: "{ \"brightness\": $brightness }");
+                            }),
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              )
+            ],
+          ),
         ),
       ),
     );
