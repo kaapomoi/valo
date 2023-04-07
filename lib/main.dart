@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -18,7 +19,7 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   bool brightnessSliderVisible = false;
-  int brightness = 255;
+  late int brightness = 255;
   List<Color> generatedColors = <Color>[];
   int lightingMode = 1;
   String ip = "192.168.50.10:80";
@@ -34,6 +35,9 @@ class _MyAppState extends State<MyApp> {
     super.initState();
     controller = TextEditingController();
     controller.text = ip;
+    // Get brightness
+    Uri ur = Uri.http(ip, "/api/v1/basic/");
+    http.get(ur);
   }
 
   @override
@@ -65,6 +69,20 @@ class _MyAppState extends State<MyApp> {
     http.post(ur,
         body: "{ \"colors\": [\"aa00bb\", \"00ffff\", \"dddd00\", \"00ffff\","
             " \"aa00bb\"], \"mode\": 3, \"brightness\": 55 }");
+  }
+
+  Future<dynamic> fetchApiData(Uri ur) async {
+    final response = await http.get(ur);
+
+    if (response.statusCode == 200) {
+      // If the server did return a 200 OK response,
+      // then parse the JSON.
+      return jsonDecode(response.body);
+    } else {
+      // If the server did not return a 200 OK response,
+      // then throw an exception.
+      throw Exception('Failed to get Api response');
+    }
   }
 
   @override
@@ -173,9 +191,6 @@ class _MyAppState extends State<MyApp> {
                       backgroundColor: Colors.white.withAlpha(100),
                       tooltip: 'Change brightness',
                       onPressed: () {
-                        // Get brightness
-                        Uri ur = Uri.http(ip, "/api/v1/basic/brightness");
-                        http.get(ur);
                         // Spawn slider
                         setState(() {
                           brightnessSliderVisible = true;
