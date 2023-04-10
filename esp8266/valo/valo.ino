@@ -15,9 +15,6 @@
 const char* ssid = SSID;
 const char* password = PASS;
 
-const double max_brightness = 256 * 3 - 1;
-const double min_brightness = 80;
-
 #define NUM_LEDS 60
 CRGB leds[NUM_LEDS];
 
@@ -35,7 +32,6 @@ CRGBPalette256 gradient_palette;
 CRGB current_color;
 CRGB target_color;
 std::uint8_t current_brightness;
-std::uint8_t target_brightness;
 
 /// Wakeup time parameters
 std::uint32_t wakeup_frames_until_update;
@@ -76,25 +72,30 @@ bool checkIncomingRequest()
     return true;
 }
 
-void handleColorApiV1Basic()
-{
+StaticJsonDocument<256> parse_request() {
+    StaticJsonDocument<256> doc;
+
     if (!checkIncomingRequest()) {
-        return;
+        return doc;
     }
 
     String const message{server.arg("plain")};
 
     Serial.println("/api/v1/basic got message: " + message);
 
-    StaticJsonDocument<96> doc;
-
     DeserializationError error = deserializeJson(doc, message);
 
     if (error) {
         Serial.print(F("deserializeJson() failed: "));
         Serial.println(error.f_str());
-        return;
     }
+
+    return doc;
+}
+
+void handleColorApiV1Basic()
+{
+    StaticJsonDocument<256> doc = parse_request();
 
     /// Handle each input individually
     if (doc["color"] != nullptr) {
@@ -108,7 +109,7 @@ void handleColorApiV1Basic()
     }
 
     if (doc["brightness"] != nullptr) {
-        target_brightness = doc["brightness"];
+        current_brightness = doc["brightness"];
     }
 
     server.send(200, "text/plain", "Mode change OK.");
@@ -116,22 +117,7 @@ void handleColorApiV1Basic()
 
 void handleColorApiV1Multi()
 {
-    if (!checkIncomingRequest()) {
-        return;
-    }
-
-    String const message{server.arg("plain")};
-
-    Serial.println("/api/v1/multi got message: " + message);
-
-    StaticJsonDocument<1024> doc;
-
-    DeserializationError error = deserializeJson(doc, message);
-
-    if (error) {
-        Serial.print(F("deserializeJson() failed: "));
-        Serial.println(error.f_str());
-    }
+    StaticJsonDocument<256> doc = parse_request();
 
     if (doc["colors"] != nullptr) {
         JsonArray c = doc["colors"];
@@ -161,7 +147,7 @@ void handleColorApiV1Multi()
     }
 
     if (doc["brightness"] != nullptr) {
-        target_brightness = doc["brightness"];
+        current_brightness = doc["brightness"];
     }
 
     led_mode = LedMode::gradient_change;
@@ -169,25 +155,9 @@ void handleColorApiV1Multi()
     server.send(200, "text/plain", "Multi color change OK.");
 }
 
-void handleColorApiV1Wakeup(){
-    if (!checkIncomingRequest()) {
-        return;
-    }
-
-    String const message{server.arg("plain")};
-
-    Serial.println("/api/v1/wakeup got message: " + message);
-
-    StaticJsonDocument<256> doc;
-
-    DeserializationError error = deserializeJson(doc, message);
-
-    if (error) {
-        Serial.print(F("deserializeJson() failed: "));
-        Serial.println(error.f_str());
-        server.send(501, "text/plain", "deserializeJson() failed.");
-        return;
-    }
+void handleColorApiV1Wakeup()
+{
+    StaticJsonDocument<256> doc = parse_request();
 
     /// Handle each input individually
     if (doc["time_seconds"] != nullptr) {
@@ -195,22 +165,22 @@ void handleColorApiV1Wakeup(){
         target_color = CRGB::White;
         int time_seconds = doc["time_seconds"];
         current_brightness = 255;
-        target_brightness = 255;
 
-        wakeup_frame_counter= 0;
-        wakeup_frames_until_update = FRAMES_PER_SECOND * time_seconds / 255; 
+        wakeup_frame_counter = 0;
+        wakeup_frames_until_update = FRAMES_PER_SECOND * time_seconds / 255;
 
         led_mode = LedMode::wakeup;
         server.send(200, "text/plain", "Wakeup routine started.");
-    } else {
+    }
+    else {
         server.send(400, "text/plain", "Bad request. time_seconds not received.");
     }
 }
 
 void setup(void)
 {
-    const int DATA_PIN = 7;
-    const int CLOCK_PIN = 5;
+    const int DATA_PIN = 8;
+    const int CLOCK_PIN = 6;
 
     // second of delay if something goes wrong, idk
     delay(1000);
@@ -264,25 +234,8 @@ void setup(void)
 void updateLeds()
 {
     static constexpr auto lerp_amount{UINT16_MAX / 10};
-    static constexpr auto lerp_amount_8{UINT8_MAX / 20};
-    static constexpr auto lerp_every_n_frames{20};
     current_color = current_color.lerp16(target_color, lerp_amount);
-    //current_brightness = target_brightness;
 
-    static auto lerp_frame_counter{0};
-    if (lerp_frame_counter >= lerp_every_n_frames) {
-        //current_brightness = lerp8by8(current_brightness, target_brightness, lerp_amount);
-        lerp_frame_counter = 0;
-    }
-    else {
-        lerp_frame_counter++;
-    }
-
-    /*Serial.println(String(current_color.r) + ", " + String(current_color.g) + ", "
-                   + String(current_color.b) + " | " + String(target_color.r) + ", "
-                   + String(target_color.g) + ", " + String(target_color.b) + " || "
-                   + current_brightness + " | " + target_brightness);
-*/
     switch (led_mode) {
     case LedMode::off: {
         break;
@@ -315,26 +268,23 @@ void updateLeds()
     FastLED.show();
 }
 
-void execute_wakeup(){
+void execute_wakeup()
+{
     wakeup_frame_counter++;
-    if (wakeup_frame_counter >= wakeup_frames_until_update){
+    if (wakeup_frame_counter >= wakeup_frames_until_update) {
         wakeup_frame_counter = 0;
 
         current_color += CRGB(1, 1, 1);
         if (current_color != target_color) {
             Serial.println("Updating color");
-        
+
             for (int i = 0; i < NUM_LEDS; i++) {
                 leds[i] = current_color;
             }
-        }else{
+        }
+        else {
             Serial.println("Current color is target color");
             led_mode = LedMode::solid;
-            Serial.println(String(current_color.r) + ", " + String(current_color.g) + ", "
-                   + String(current_color.b) + " | " + String(target_color.r) + ", "
-                   + String(target_color.g) + ", " + String(target_color.b) + " || "
-                   + current_brightness + " | " + target_brightness);
-            
         }
 
         FastLED.setBrightness(current_brightness);
@@ -353,9 +303,10 @@ void loop(void)
     else if ((millis() - prev_time) >= frame_time) {
         prev_time = millis();
 
-        if (led_mode == LedMode::wakeup){
+        if (led_mode == LedMode::wakeup) {
             execute_wakeup();
-        }else{
+        }
+        else {
             // Update LEDs
             updateLeds();
         }
