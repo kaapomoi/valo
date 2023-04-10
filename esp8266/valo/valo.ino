@@ -177,60 +177,6 @@ void handleColorApiV1Wakeup()
     }
 }
 
-void setup(void)
-{
-    const int DATA_PIN = 8;
-    const int CLOCK_PIN = 6;
-
-    // second of delay if something goes wrong, idk
-    delay(1000);
-
-    Serial.begin(115200);
-
-    // Start wifi networking
-    WiFi.mode(WIFI_STA);
-    WiFi.begin(ssid, password);
-    Serial.println("");
-
-    // Create LED "strip" object
-
-    FastLED.addLeds<APA102, DATA_PIN, CLOCK_PIN, BGR>(leds, NUM_LEDS);
-
-    FastLED.setBrightness(255);
-    FastLED.setDither(0);
-
-    // Wait for connection
-    while (WiFi.status() != WL_CONNECTED) {
-        delay(500);
-        Serial.print(".");
-    }
-    Serial.println("");
-    Serial.print("Connected to ");
-    Serial.println(ssid);
-    Serial.print("IP address: ");
-    Serial.println(WiFi.localIP());
-
-    // Initialize server routings
-    server.on("/api/v1/basic", HTTP_POST, handleColorApiV1Basic);
-    server.on("/api/v1/multi", HTTP_POST, handleColorApiV1Multi);
-    server.on("/api/v1/wakeup", HTTP_POST, handleColorApiV1Wakeup);
-    server.onNotFound(
-        []() { server.send(404, "text/plain", "404: Not found. Try to POST on /api/v1"); });
-
-    if (MDNS.begin("valo")) {
-        Serial.println("MDNS Service started");
-    }
-
-    // Start the server
-    const char* headerkeys[] = {"User-Agent", "Cookie"};
-    size_t headerkeyssize = sizeof(headerkeys) / sizeof(char*);
-    // ask server to track these headers
-    server.collectHeaders(headerkeys, headerkeyssize);
-    server.begin();
-    Serial.println("HTTP server started");
-    prev_time = millis();
-}
-
 void updateLeds()
 {
     static constexpr auto lerp_amount{UINT16_MAX / 10};
@@ -290,6 +236,60 @@ void execute_wakeup()
         FastLED.setBrightness(current_brightness);
         FastLED.show();
     }
+}
+
+void setup(void)
+{
+    const int DATA_PIN = 8;
+    const int CLOCK_PIN = 6;
+
+    // second of delay if something goes wrong, idk
+    delay(1000);
+
+    Serial.begin(115200);
+
+    // Start wifi networking
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(ssid, password);
+    Serial.println("");
+
+    // Create LED "strip" object
+
+    FastLED.addLeds<APA102, DATA_PIN, CLOCK_PIN, BGR>(leds, NUM_LEDS);
+
+    FastLED.setBrightness(255);
+    FastLED.setDither(0);
+
+    // Wait for connection
+    while (WiFi.status() != WL_CONNECTED) {
+        delay(500);
+        Serial.print(".");
+    }
+    Serial.println("");
+    Serial.print("Connected to ");
+    Serial.println(ssid);
+    Serial.print("IP address: ");
+    Serial.println(WiFi.localIP());
+
+    // Initialize server routings
+    server.on("/api/v1/basic", HTTP_POST, handleColorApiV1Basic);
+    server.on("/api/v1/multi", HTTP_POST, handleColorApiV1Multi);
+    server.on("/api/v1/wakeup", HTTP_POST, handleColorApiV1Wakeup);
+    server.onNotFound(
+        []() { server.send(404, "text/plain", "404: Not found. Try to POST on /api/v1"); });
+
+    if (MDNS.begin("valo")) {
+        Serial.println("MDNS Service started");
+    }
+
+    // Start the server
+    const char* headerkeys[] = {"User-Agent", "Cookie"};
+    size_t headerkeyssize = sizeof(headerkeys) / sizeof(char*);
+    // ask server to track these headers
+    server.collectHeaders(headerkeys, headerkeyssize);
+    server.begin();
+    Serial.println("HTTP server started");
+    prev_time = millis();
 }
 
 void loop(void)
