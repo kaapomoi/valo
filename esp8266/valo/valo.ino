@@ -161,7 +161,7 @@ void handleColorApiV1Wakeup()
 
     /// Handle each input individually
     if (doc["time_seconds"] != nullptr) {
-        current_color = CRGB(0, 0, 0);
+        current_color = CRGB(15, 8, 0);
         target_color = CRGB::White;
         int time_seconds = doc["time_seconds"];
         current_brightness = 255;
@@ -275,7 +275,7 @@ void execute_wakeup()
         wakeup_frame_counter = 0;
 
         current_color += CRGB(1, 1, 1);
-        if (current_color != target_color) {
+        if (current_color.r < 255) {
             Serial.println("Updating color");
 
             for (int i = 0; i < NUM_LEDS; i++) {
