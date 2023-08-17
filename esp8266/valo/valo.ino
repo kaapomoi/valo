@@ -6,6 +6,8 @@
 #define FASTLED_ESP8266_NODEMCU_PIN_ORDER
 #include "FastLED.h"
 #include "secret.h"
+#include <NTPClient.h>
+#include <WiFiUdp.h>
 
 #ifndef SSID
 #define SSID "NOT_VALID"
@@ -24,24 +26,34 @@ unsigned long cur_time = 0;
 unsigned long prev_time = 0;
 unsigned long frame_time = ceil((float)1000 / (float)FRAMES_PER_SECOND);
 
+unsigned long ntp_counter = 0;
+unsigned long ntp_threshold = FRAMES_PER_SECOND;
+
 /// Gradient change mode variables
 unsigned long gradient_color_index{0};
 CRGBPalette256 gradient_palette;
 
 /// Used in basic color modes
 CRGB current_color;
-CRGB target_color;
-std::uint8_t current_brightness;
+CRGB target_color{CRGB::White};
+std::uint8_t current_brightness{255};
 
 /// Wakeup time parameters
-std::uint32_t wakeup_frames_until_update;
-std::uint32_t wakeup_frame_counter;
+std::uint32_t wakeup_frames_until_update{FRAMES_PER_SECOND * 600 / 255};
+std::uint32_t wakeup_frame_counter{0};
+
+/// Alarm parameters
+bool alarm_enabled{true};
+std::uint8_t alarm_hours{6};
+std::uint8_t alarm_minutes{30};
 
 enum class LedMode : uint8_t { off = 0, solid = 1, sparkle = 2, gradient_change = 3, wakeup = 4 };
 
 LedMode led_mode{LedMode::off};
 
 ESP8266WebServer server(80);
+WiFiUDP ntp_udp;
+NTPClient ntp_client(ntp_udp, "pool.ntp.org", 10800);
 
 CRGB getColorFromHex(String hex)
 {
@@ -81,7 +93,7 @@ StaticJsonDocument<256> parse_request() {
 
     String const message{server.arg("plain")};
 
-    Serial.println("/api/v1/basic got message: " + message);
+    Serial.println("/api/v1/ got message: " + message);
 
     DeserializationError error = deserializeJson(doc, message);
 
@@ -177,6 +189,27 @@ void handleColorApiV1Wakeup()
     }
 }
 
+void handleColorApiV1Alarm()
+{
+    StaticJsonDocument<512> doc = parse_request();
+
+    if (doc["alarm_enabled"] != nullptr){
+        alarm_enabled = doc["alarm_enabled"];
+        Serial.println("Alarm enabled:" + alarm_enabled);
+    }
+    if (doc["alarm_hours"] != nullptr){
+        alarm_hours = doc["alarm_hours"];
+        Serial.println("Alarm hours:" + alarm_hours);
+    }
+    if (doc["alarm_minutes"] != nullptr){
+        alarm_minutes = doc["alarm_minutes"];
+        Serial.println("Alarm minutes:" + alarm_minutes);
+    }
+
+    server.send(200, "text/plain", "Alarm set.");
+}
+
+
 void updateLeds()
 {
     static constexpr auto lerp_amount{UINT16_MAX / 10};
@@ -184,6 +217,7 @@ void updateLeds()
 
     switch (led_mode) {
     case LedMode::off: {
+        FastLED.clear(true);
         break;
     }
     case LedMode::solid: {
@@ -275,6 +309,7 @@ void setup(void)
     server.on("/api/v1/basic", HTTP_POST, handleColorApiV1Basic);
     server.on("/api/v1/multi", HTTP_POST, handleColorApiV1Multi);
     server.on("/api/v1/wakeup", HTTP_POST, handleColorApiV1Wakeup);
+    server.on("/api/v1/alarm", HTTP_POST, handleColorApiV1Alarm);
     server.onNotFound(
         []() { server.send(404, "text/plain", "404: Not found. Try to POST on /api/v1"); });
 
@@ -289,6 +324,7 @@ void setup(void)
     server.collectHeaders(headerkeys, headerkeyssize);
     server.begin();
     Serial.println("HTTP server started");
+    ntp_client.begin();
     prev_time = millis();
 }
 
@@ -296,13 +332,25 @@ void loop(void)
 {
     server.handleClient();
 
-    // Caveman impl.
-    if (led_mode == LedMode::off) {
-        FastLED.clear(true);
-    }
-    else if ((millis() - prev_time) >= frame_time) {
-        prev_time = millis();
+    if ((millis() - prev_time) >= frame_time) {
+        if (ntp_counter++ > ntp_threshold){
+            ntp_counter = 0;
+            ntp_client.update();
+            Serial.println(ntp_client.getFormattedTime());
+        }
+        
+        if ((ntp_client.getHours() == alarm_hours) && 
+            (ntp_client.getMinutes() == alarm_minutes) &&
+            (ntp_client.getSeconds() == 0))
+        {
+            Serial.println("Alarm rang, start wakeup.");
+            current_color = CRGB(30, 10, 0);
+            target_color = CRGB::White;
+            current_brightness = 255;
+            led_mode = LedMode::wakeup;
+        }
 
+        prev_time = millis();
         if (led_mode == LedMode::wakeup) {
             execute_wakeup();
         }

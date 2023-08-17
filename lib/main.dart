@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:http/http.dart' as http;
+import 'package:http/http.dart';
 import 'package:simple_gesture_detector/simple_gesture_detector.dart';
 
 void main() => runApp(const MaterialApp(home: MyApp()));
@@ -25,6 +26,8 @@ class _MyAppState extends State<MyApp> {
   String ip = "192.168.50.10:80";
   var mySystemTheme = SystemUiOverlayStyle.light.copyWith(
       systemNavigationBarColor: const Color.fromARGB(0, 255, 255, 255));
+
+  TimeOfDay _time = TimeOfDay(hour: 6, minute: 30);
 
   Color pickerColor = const Color(0xffffeedd);
 
@@ -64,11 +67,32 @@ class _MyAppState extends State<MyApp> {
     http.post(ur, body: "{ 'mode': ${lightingMode.toString()} }");
   }
 
-  void sendTestApiRequest() {
-    Uri ur = Uri.http(ip, "/api/v1/multi");
-    http.post(ur,
-        body: "{ \"colors\": [\"aa00bb\", \"00ffff\", \"dddd00\", \"00ffff\","
-            " \"aa00bb\"], \"mode\": 3, \"brightness\": 55 }");
+  void _selectTime() async {
+    final TimeOfDay? newTime =
+        await showTimePicker(context: context, initialTime: _time);
+    if (newTime != null) {
+      setState(() {
+        _time = newTime;
+      });
+    }
+    sendAlarmApiRequest();
+  }
+
+  void sendAlarmApiRequest() async {
+    Uri ur = Uri.http(ip, "/api/v1/alarm");
+    final Response response = await http.post(ur,
+        body:
+            "{ 'alarm_hours': ${_time.hour.toString()}, 'alarm_minutes': ${_time.minute.toString()}, 'alarm_enabled': 1 }");
+    showDialog(
+        context: context,
+        builder: (context) {
+          Future.delayed(const Duration(seconds: 5), () {
+            Navigator.of(context).pop(true);
+          });
+          return AlertDialog(
+            title: Text(response.body),
+          );
+        });
   }
 
   Future<dynamic> fetchApiData(Uri ur) async {
@@ -170,7 +194,7 @@ class _MyAppState extends State<MyApp> {
               FloatingActionButton(
                 backgroundColor: Colors.white.withAlpha(100),
                 tooltip: 'Test Color API',
-                onPressed: sendTestApiRequest,
+                onPressed: _selectTime,
                 child: const Icon(Icons.api),
               ),
               FloatingActionButton(
