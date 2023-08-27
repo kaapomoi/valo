@@ -6,14 +6,14 @@ Swipe left or right to get new colors, or just scroll down endlessly.
 
 
 ### Setup
-Currently only works with static SSID and password & ip configurations.
+Currently only works with static SSID, password and IP configurations.
 
 
 ### ESP8266 LED API
 
 The [ESP8266](esp8266/valo/valo.ino) hosts a JSON-based API that can be used without the front-end Flutter app.
 
-An example of such usage is located here: [wakeup-light](https://github.com/kaapomoi/wakeup-light).
+An example of external usage is located here: [wakeup-light](https://github.com/kaapomoi/wakeup-light).
 
 #### API Endpoints
 
@@ -39,6 +39,13 @@ An example of such usage is located here: [wakeup-light](https://github.com/kaap
 /api/v1/wakeup:
 {
     "time_seconds": 1800  /// Ramp up white light from zero to full brightness in 30 minutes.
+}
+
+/api/v1/alarm:
+{
+    "alarm_enabled": 1,  /// Enable/disable the alarm (1|0)
+    "alarm_hours": 6,    /// Set which hour to ring the alarm at (0-23) 
+    "alarm_minutes": 15  /// Set which minute to ring the alarm at (0-59) 
 }
 
 ```
