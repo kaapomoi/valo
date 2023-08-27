@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:convert';
 import 'dart:math';
 
@@ -8,26 +9,47 @@ import 'package:http/http.dart' as http;
 import 'package:http/http.dart';
 import 'package:simple_gesture_detector/simple_gesture_detector.dart';
 
-void main() => runApp(const MaterialApp(home: MyApp()));
+void main() {
+  if (Platform.isAndroid) {
+    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+        systemNavigationBarColor: Color(0xff121212)));
+  }
 
-class MyApp extends StatefulWidget {
+  runApp(const MyApp());
+}
+
+class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
   @override
-  // ignore: library_private_types_in_public_api
-  _MyAppState createState() => _MyAppState();
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'valo',
+      theme: ThemeData(
+        colorScheme: const ColorScheme.dark(),
+        useMaterial3: true,
+      ),
+      home: const MyHomePage(title: "valo"),
+    );
+  }
 }
 
-class _MyAppState extends State<MyApp> {
-  bool brightnessSliderVisible = false;
-  late int brightness = 255;
+class MyHomePage extends StatefulWidget {
+  const MyHomePage({super.key, required this.title});
+
+  final String title;
+
+  @override
+  State<MyHomePage> createState() => _MyHomePageState();
+}
+
+class _MyHomePageState extends State<MyHomePage> {
+  late double brightness = 255;
   List<Color> generatedColors = <Color>[];
   int lightingMode = 1;
   String ip = "192.168.50.10:80";
-  var mySystemTheme = SystemUiOverlayStyle.light.copyWith(
-      systemNavigationBarColor: const Color.fromARGB(0, 255, 255, 255));
 
-  TimeOfDay _time = TimeOfDay(hour: 6, minute: 30);
+  TimeOfDay _time = const TimeOfDay(hour: 6, minute: 30);
 
   Color pickerColor = const Color(0xffffeedd);
 
@@ -74,8 +96,8 @@ class _MyAppState extends State<MyApp> {
       setState(() {
         _time = newTime;
       });
+      sendAlarmApiRequest();
     }
-    sendAlarmApiRequest();
   }
 
   void sendAlarmApiRequest() async {
@@ -83,6 +105,8 @@ class _MyAppState extends State<MyApp> {
     final Response response = await http.post(ur,
         body:
             "{ 'alarm_hours': ${_time.hour.toString()}, 'alarm_minutes': ${_time.minute.toString()}, 'alarm_enabled': 1 }");
+
+    /// TODO: Fix this dialog
     showDialog(
         context: context,
         builder: (context) {
@@ -109,162 +133,82 @@ class _MyAppState extends State<MyApp> {
     }
   }
 
+  Icon getIcon() {
+    switch (lightingMode) {
+      case 1:
+        return const Icon(Icons.scatter_plot_sharp);
+      case 2:
+        return const Icon(Icons.lightbulb);
+      default:
+        return const Icon(Icons.lightbulb);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: mySystemTheme,
-      child: Scaffold(
-        body: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topRight,
-              end: Alignment.bottomLeft,
-              stops: [
-                0.1,
-                0.2,
-                0.35,
-                0.55,
-                0.8,
-              ],
-              colors: [
-                Color.fromARGB(255, 182, 162, 161),
-                Color.fromARGB(255, 209, 188, 125),
-                Color.fromARGB(255, 179, 105, 124),
-                Color.fromARGB(255, 141, 177, 196),
-                Color.fromARGB(255, 44, 36, 88),
-              ],
-            ),
-          ),
-          child: SimpleGestureDetector(
-            onHorizontalSwipe: _onHorizontalSwipe,
-            swipeConfig: const SimpleSwipeConfig(
-              verticalThreshold: 40.0,
-              horizontalThreshold: 40.0,
-              swipeDetectionBehavior: SwipeDetectionBehavior.continuousDistinct,
-            ),
-            child: ShaderMask(
-                shaderCallback: (Rect rect) {
-                  return const LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Color.fromARGB(172, 0, 0, 0),
-                      Colors.transparent,
-                      Colors.transparent,
-                      Color.fromARGB(172, 0, 0, 0)
-                    ],
-                    stops: [0.0, 0.15, 0.85, 1.0],
-                  ).createShader(rect);
-                },
-                blendMode: BlendMode.dstOut,
-                child: _showColors()),
-          ),
+    return Scaffold(
+      body: SimpleGestureDetector(
+        onHorizontalSwipe: _onHorizontalSwipe,
+        swipeConfig: const SimpleSwipeConfig(
+          verticalThreshold: 40.0,
+          horizontalThreshold: 40.0,
+          swipeDetectionBehavior: SwipeDetectionBehavior.continuousDistinct,
         ),
-        floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-        floatingActionButton: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 21.9),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: <Widget>[
-              FloatingActionButton(
-                backgroundColor: Colors.white.withAlpha(100),
-                tooltip: 'Toggle blinking effect',
-                onPressed: _toggleLightingMode,
-                child: lightingMode == 1
-                    ? const Icon(Icons.scatter_plot_sharp)
-                    : const Icon(Icons.lightbulb),
-              ),
-              // FloatingActionButton(
-              //   backgroundColor: Colors.white.withAlpha(100),
-              //   tooltip: 'Change target IP address',
-              //   onPressed: () async {
-              //     final newIp = await openIpChangeDialog();
-              //     if (newIp == null || newIp.isEmpty) return;
-              //     setState(() => ip = newIp);
-              //   },
-              //   child: const Icon(Icons.wifi_sharp),
-              // ),
-              FloatingActionButton(
-                backgroundColor: Colors.white.withAlpha(100),
-                tooltip: 'Open Color Picker Dialog',
-                onPressed: openColorPickerDialog,
-                child: const Icon(Icons.color_lens_sharp),
-              ),
-              FloatingActionButton(
-                backgroundColor: Colors.white.withAlpha(100),
-                tooltip: 'Test Color API',
-                onPressed: _selectTime,
-                child: const Icon(Icons.api),
-              ),
-              FloatingActionButton(
-                backgroundColor: Colors.white.withAlpha(100),
-                tooltip: 'Turn LEDs Off',
-                onPressed: () {
-                  Uri ur = Uri.http(ip, "/api/v1/basic");
-                  http.post(ur, body: "{ \"mode\": 0 }");
-                },
-                child: const Icon(Icons.power_off_sharp),
-              ),
-              Column(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  Visibility(
-                    visible: !brightnessSliderVisible,
-                    child: FloatingActionButton(
-                      backgroundColor: Colors.white.withAlpha(100),
-                      tooltip: 'Change brightness',
-                      onPressed: () {
-                        // Spawn slider
-                        setState(() {
-                          brightnessSliderVisible = true;
-                        });
-                      },
-                      child: const Icon(Icons.brightness_1),
-                    ),
-                  ),
-                  Visibility(
-                    visible: brightnessSliderVisible,
-                    child: SizedBox(
-                      width: 56.0,
-                      height: MediaQuery.of(context).size.height / 3,
-                      child: RotatedBox(
-                        quarterTurns: 3,
-                        child: Slider(
-                          activeColor: Colors.white.withAlpha(100),
-                          thumbColor: Colors.white.withAlpha(200),
-                          inactiveColor: Colors.white.withAlpha(50),
-                          min: 0,
-                          max: 255,
-                          value: brightness.toDouble(),
-                          onChanged: ((value) =>
-                              setState(() => brightness = value.toInt())),
-                          onChangeEnd: (newValue) => {
-                            setState(() {
-                              brightnessSliderVisible = false;
-
-                              Uri ur = Uri.http(ip, "/api/v1/basic");
-                              http.post(ur,
-                                  body: "{ \"brightness\": $brightness }");
-                            }),
-                          },
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              )
-            ],
-          ),
-        ),
+        child: _showColors(),
       ),
+      persistentFooterButtons: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: <Widget>[
+            ElevatedButton(
+              onPressed: _toggleLightingMode,
+              child: getIcon(),
+            ),
+            // FloatingActionButton(
+            //   backgroundColor: Colors.white.withAlpha(100),
+            //   tooltip: 'Change target IP address',
+            //   onPressed: () async {
+            //     final newIp = await openIpChangeDialog();
+            //     if (newIp == null || newIp.isEmpty) return;
+            //     setState(() => ip = newIp);
+            //   },
+            //   child: const Icon(Icons.wifi_sharp),
+            // ),
+            ElevatedButton(
+              onPressed: openColorPickerDialog,
+              child: const Icon(Icons.color_lens_sharp),
+            ),
+            ElevatedButton(
+              onPressed: _selectTime,
+              child: const Icon(Icons.api),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                setState(() {
+                  lightingMode = 0;
+                });
+                Uri ur = Uri.http(ip, "/api/v1/basic");
+                http.post(ur, body: "{ \"mode\": 0 }");
+              },
+              child: const Icon(Icons.power_off_sharp),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                openBrightnessSliderDialog();
+              },
+              child: const Icon(Icons.brightness_1),
+            ),
+          ],
+        ),
+      ],
     );
   }
 
   Widget _showColors() {
     return GridView.builder(
       gridDelegate:
-          const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3),
+          const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 4),
       shrinkWrap: true,
       itemBuilder: (BuildContext context, int index) {
         Color color;
@@ -279,15 +223,27 @@ class _MyAppState extends State<MyApp> {
           generatedColors.add(color);
         }
 
-        return InkWell(
-          onTap: () {
-            var colorStr =
-                color.value.toRadixString(16).substring(2).toUpperCase();
-            Uri ur = Uri.http(ip, "/api/v1/basic");
-            http.post(ur, body: "{ 'color': '$colorStr' }");
-          },
-          child: Card(
-            color: color,
+        var colorStr = color.value.toRadixString(16).substring(2).toUpperCase();
+
+        return Container(
+          padding: const EdgeInsets.all(4.0),
+          child: ElevatedButton(
+            style: ButtonStyle(
+              backgroundColor: MaterialStateProperty.resolveWith((states) {
+                return color;
+              }),
+            ),
+            onPressed: () {
+              Uri ur = Uri.http(ip, "/api/v1/basic");
+              http.post(ur, body: "{ 'color': '$colorStr' }");
+            },
+            child: Text(
+                style: TextStyle(
+                    color: Colors.black.withOpacity(0.80),
+                    fontSize: 7,
+                    letterSpacing: 2,
+                    fontWeight: FontWeight.w200),
+                "#$colorStr"),
           ),
         );
       },
@@ -329,6 +285,20 @@ class _MyAppState extends State<MyApp> {
         ),
       );
 
+  void openBrightnessSliderDialog() async {
+    final newBrightness = await showDialog(
+        context: context,
+        builder: (context) =>
+            BrightnessChangeDialog(initialBrightness: brightness));
+    if (newBrightness != null) {
+      setState(() {
+        brightness = newBrightness;
+        Uri ur = Uri.http(ip, "/api/v1/basic");
+        http.post(ur, body: "{ \"brightness\": $brightness }");
+      });
+    }
+  }
+
   Future<String?> openIpChangeDialog() => showDialog<String>(
         context: context,
         builder: (context) => AlertDialog(
@@ -348,5 +318,43 @@ class _MyAppState extends State<MyApp> {
 
   void submitNewIpAddress() {
     Navigator.of(context).pop(controller.text);
+  }
+}
+
+class BrightnessChangeDialog extends StatefulWidget {
+  final double initialBrightness;
+
+  const BrightnessChangeDialog({super.key, required this.initialBrightness});
+
+  @override
+  State<BrightnessChangeDialog> createState() => _BrightnessChangeDialogState();
+}
+
+class _BrightnessChangeDialogState extends State<BrightnessChangeDialog> {
+  late double brightness;
+
+  @override
+  void initState() {
+    super.initState();
+    brightness = widget.initialBrightness;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      alignment: Alignment.bottomCenter,
+      insetPadding: const EdgeInsets.all(24),
+      child: SizedBox(
+        width: MediaQuery.of(context).size.height / 3,
+        height: 72.0,
+        child: Slider(
+          min: 0,
+          max: 255,
+          value: brightness,
+          onChanged: ((value) => setState(() => brightness = value)),
+          onChangeEnd: (newValue) => {Navigator.pop(context, newValue)},
+        ),
+      ),
+    );
   }
 }
