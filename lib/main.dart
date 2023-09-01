@@ -232,7 +232,20 @@ class _MyHomePageState extends State<MyHomePage> {
             ),
             onPressed: () {
               Uri ur = Uri.http(ip, "/api/v1/basic");
-              http.post(ur, body: "{ 'color': '$colorStr' }");
+
+              String body;
+
+              if (lightingMode == 0) {
+                setState(() {
+                  lightingMode = 1;
+                });
+                body =
+                    "{ 'color': '$colorStr', 'mode': ${lightingMode.toString()} }";
+              } else {
+                body = "{ 'color': '$colorStr' }";
+              }
+
+              http.post(ur, body: body);
             },
             child: Text(
                 style: TextStyle(
