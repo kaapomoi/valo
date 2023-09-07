@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'dart:convert';
 import 'dart:math';
 
@@ -10,10 +9,8 @@ import 'package:http/http.dart';
 import 'package:simple_gesture_detector/simple_gesture_detector.dart';
 
 void main() {
-  if (Platform.isAndroid) {
-    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-        systemNavigationBarColor: Color(0xff121212)));
-  }
+  SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(systemNavigationBarColor: Color(0xff121212)));
 
   runApp(const MyApp());
 }
