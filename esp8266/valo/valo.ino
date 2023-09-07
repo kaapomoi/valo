@@ -6,6 +6,7 @@
 #define FASTLED_ESP8266_NODEMCU_PIN_ORDER
 #include "FastLED.h"
 #include "secret.h"
+
 #include <NTPClient.h>
 #include <WiFiUdp.h>
 
@@ -16,6 +17,22 @@
 
 const char* ssid = SSID;
 const char* password = PASS;
+
+const uint8_t PROGMEM gamma8[] = {
+    0,   0,   0,   0,   0,   0,   0,   0,   1,   1,   1,   1,   1,   1,   1,   2,   2,   2,   2,
+    2,   3,   3,   3,   3,   4,   4,   4,   4,   5,   5,   5,   6,   6,   6,   7,   7,   8,   8,
+    8,   9,   9,   10,  10,  10,  11,  11,  12,  12,  13,  13,  14,  14,  15,  15,  16,  16,  17,
+    17,  18,  18,  19,  19,  20,  21,  21,  22,  22,  23,  24,  24,  25,  26,  26,  27,  28,  28,
+    29,  30,  30,  31,  32,  32,  33,  34,  35,  35,  36,  37,  38,  38,  39,  40,  41,  41,  42,
+    43,  44,  45,  46,  46,  47,  48,  49,  50,  51,  52,  53,  53,  54,  55,  56,  57,  58,  59,
+    60,  61,  62,  63,  64,  65,  66,  67,  68,  69,  70,  71,  72,  73,  74,  75,  76,  77,  78,
+    79,  80,  81,  82,  83,  84,  86,  87,  88,  89,  90,  91,  92,  93,  95,  96,  97,  98,  99,
+    100, 102, 103, 104, 105, 107, 108, 109, 110, 111, 113, 114, 115, 116, 118, 119, 120, 122, 123,
+    124, 126, 127, 128, 129, 131, 132, 134, 135, 136, 138, 139, 140, 142, 143, 145, 146, 147, 149,
+    150, 152, 153, 154, 156, 157, 159, 160, 162, 163, 165, 166, 168, 169, 171, 172, 174, 175, 177,
+    178, 180, 181, 183, 184, 186, 188, 189, 191, 192, 194, 195, 197, 199, 200, 202, 204, 205, 207,
+    208, 210, 212, 213, 215, 217, 218, 220, 222, 224, 225, 227, 229, 230, 232, 234, 236, 237, 239,
+    241, 243, 244, 246, 248, 250, 251, 253, 255};
 
 #define NUM_LEDS 60
 CRGB leds[NUM_LEDS];
@@ -84,7 +101,8 @@ bool checkIncomingRequest()
     return true;
 }
 
-StaticJsonDocument<256> parse_request() {
+StaticJsonDocument<256> parse_request()
+{
     StaticJsonDocument<256> doc;
 
     if (!checkIncomingRequest()) {
@@ -193,15 +211,15 @@ void handleColorApiV1Alarm()
 {
     StaticJsonDocument<512> doc = parse_request();
 
-    if (doc["alarm_enabled"] != nullptr){
+    if (doc["alarm_enabled"] != nullptr) {
         alarm_enabled = doc["alarm_enabled"];
         Serial.println("Alarm enabled:" + alarm_enabled);
     }
-    if (doc["alarm_hours"] != nullptr){
+    if (doc["alarm_hours"] != nullptr) {
         alarm_hours = doc["alarm_hours"];
         Serial.println("Alarm hours:" + alarm_hours);
     }
-    if (doc["alarm_minutes"] != nullptr){
+    if (doc["alarm_minutes"] != nullptr) {
         alarm_minutes = doc["alarm_minutes"];
         Serial.println("Alarm minutes:" + alarm_minutes);
     }
@@ -209,6 +227,12 @@ void handleColorApiV1Alarm()
     server.send(200, "text/plain", "Alarm set.");
 }
 
+void setGammaCorrectedLedColor(CRGB& led, CRGB const& color)
+{
+    led.r = pgm_read_byte(&gamma8[color.r]);
+    led.g = pgm_read_byte(&gamma8[color.g]);
+    led.b = pgm_read_byte(&gamma8[color.b]);
+}
 
 void updateLeds()
 {
@@ -222,19 +246,22 @@ void updateLeds()
     }
     case LedMode::solid: {
         for (int i = 0; i < NUM_LEDS; i++) {
-            leds[i] = current_color;
+            setGammaCorrectedLedColor(leds[i], current_color);
         }
         break;
     }
     case LedMode::sparkle: {
         fadeToBlackBy(leds, NUM_LEDS, 10);
-        int pos = random8(NUM_LEDS);
-        leds[pos] += current_color + CRGB(random8(32), random8(32), random8(32));
+        int const pos{random8(NUM_LEDS)};
+        setGammaCorrectedLedColor(leds[pos],
+                                  current_color + CRGB(random8(32), random8(32), random8(32)));
         break;
     }
     case LedMode::gradient_change: {
         for (int i = 0; i < NUM_LEDS; i++) {
-            leds[i] = ColorFromPalette(gradient_palette, gradient_color_index, 255, LINEARBLEND);
+            setGammaCorrectedLedColor(
+                leds[i],
+                ColorFromPalette(gradient_palette, gradient_color_index, 255, LINEARBLEND));
         }
         gradient_color_index += 1;
         break;
@@ -259,7 +286,7 @@ void execute_wakeup()
             Serial.println("Updating color");
 
             for (int i = 0; i < NUM_LEDS; i++) {
-                leds[i] = current_color;
+                setGammaCorrectedLedColor(leds[i], current_color);
             }
         }
         else {
@@ -326,6 +353,18 @@ void setup(void)
     Serial.println("HTTP server started");
     ntp_client.begin();
     prev_time = millis();
+
+    float gamma = 1.8;               // Correction factor
+    int max_in = 255, max_out = 255; // Top end of OUTPUT range
+    Serial.print("const uint8_t PROGMEM gamma8[] = {");
+    for (int i = 0; i <= max_in; i++) {
+        if (i > 0)
+            Serial.print(',');
+        if ((i & 15) == 0)
+            Serial.print("\n  ");
+        Serial.print((int)(pow((float)i / (float)max_in, gamma) * max_out + 0.5));
+    }
+    Serial.println(" };");
 }
 
 void loop(void)
@@ -333,16 +372,14 @@ void loop(void)
     server.handleClient();
 
     if ((millis() - prev_time) >= frame_time) {
-        if (ntp_counter++ > ntp_threshold){
+        if (ntp_counter++ > ntp_threshold) {
             ntp_counter = 0;
             ntp_client.update();
             Serial.println(ntp_client.getFormattedTime());
         }
-        
-        if ((ntp_client.getHours() == alarm_hours) && 
-            (ntp_client.getMinutes() == alarm_minutes) &&
-            (ntp_client.getSeconds() == 0))
-        {
+
+        if ((ntp_client.getHours() == alarm_hours) && (ntp_client.getMinutes() == alarm_minutes)
+            && (ntp_client.getSeconds() == 0)) {
             Serial.println("Alarm rang, start wakeup.");
             current_color = CRGB(30, 10, 0);
             target_color = CRGB::White;
