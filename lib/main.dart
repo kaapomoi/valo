@@ -57,8 +57,8 @@ class _MyHomePageState extends State<MyHomePage> {
     super.initState();
     controller = TextEditingController();
     // Get brightness
-    for(var i = 0; i < ips.length; i++){
-      Uri ur = Uri.http(ips[i], "/api/v1/basic/");
+    for (var i = 0; i < ips.length; i++) {
+      Uri ur = Uri.http(ips[i], "/api/v1/basic");
       http.get(ur);
     }
   }
@@ -83,8 +83,8 @@ class _MyHomePageState extends State<MyHomePage> {
         lightingMode = 1;
       });
     }
-    for(var i = 0; i < ips.length; i++){
-      Uri ur = Uri.http(ips[i], "/api/v1/basic/");
+    for (var i = 0; i < ips.length; i++) {
+      Uri ur = Uri.http(ips[i], "/api/v1/basic");
       http.post(ur, body: "{ 'mode': ${lightingMode.toString()} }");
     }
   }
@@ -101,25 +101,24 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   void sendAlarmApiRequest() async {
-    for(var i = 0; i < ips.length; i++){
+    for (var i = 0; i < ips.length; i++) {
       Uri ur = Uri.http(ips[i], "/api/v1/alarm");
       final Response response = await http.post(ur,
-        body:
-            "{ 'alarm_hours': ${_time.hour.toString()}, 'alarm_minutes': ${_time.minute.toString()}, 'alarm_enabled': 1 }");
+          body:
+              "{ 'alarm_hours': ${_time.hour.toString()}, 'alarm_minutes': ${_time.minute.toString()}, 'alarm_enabled': 1 }");
 
-    /// TODO: Fix this dialog
-    showDialog(
-        context: context,
-        builder: (context) {
-          Future.delayed(const Duration(seconds: 5), () {
-            Navigator.of(context).pop(true);
+      /// TODO: Fix this dialog
+      showDialog(
+          context: context,
+          builder: (context) {
+            Future.delayed(const Duration(seconds: 5), () {
+              Navigator.of(context).pop(true);
+            });
+            return AlertDialog(
+              title: Text(response.body),
+            );
           });
-          return AlertDialog(
-            title: Text(response.body),
-          );
-        });
     }
-
   }
 
   Future<dynamic> fetchApiData(Uri ur) async {
@@ -192,9 +191,9 @@ class _MyHomePageState extends State<MyHomePage> {
                   lightingMode = 0;
                 });
 
-                for(var i = 0; i < ips.length; i++){
-                  Uri ur = Uri.http(ips[i], "/api/v1/basic/");
-                  http.post(ur, body: "{ \"mode\": 0 }");
+                for (var i = 0; i < ips.length; i++) {
+                  Uri ur = Uri.http(ips[i], "/api/v1/basic");
+                  http.post(ur, body: "{ 'mode': 0 }");
                 }
               },
               child: const Icon(Icons.power_off_sharp),
@@ -240,8 +239,8 @@ class _MyHomePageState extends State<MyHomePage> {
               }),
             ),
             onPressed: () {
-              for(var i = 0; i < ips.length; i++){
-                Uri ur = Uri.http(ips[i], "/api/v1/basic/");
+              for (var i = 0; i < ips.length; i++) {
+                Uri ur = Uri.http(ips[i], "/api/v1/basic");
 
                 String body = "{'color': '$colorStr'";
                 if (lightingMode == 0) {
@@ -293,8 +292,10 @@ class _MyHomePageState extends State<MyHomePage> {
                     .toRadixString(16)
                     .substring(2)
                     .toUpperCase();
-                Uri ur = Uri.http(ip, "/api/v1/basic");
-                http.post(ur, body: "{ 'color': '$pickerColorStr' }");
+                for (var i = 0; i < ips.length; i++) {
+                  Uri ur = Uri.http(ips[i], "/api/v1/basic");
+                  http.post(ur, body: "{ 'color': '$pickerColorStr' }");
+                }
               },
               child: const Text("Apply"),
             ),
@@ -310,7 +311,7 @@ class _MyHomePageState extends State<MyHomePage> {
     if (newBrightness != null) {
       setState(() {
         brightness = newBrightness;
-        for(var i = 0; i < ips.length; i++){
+        for (var i = 0; i < ips.length; i++) {
           Uri ur = Uri.http(ips[i], "/api/v1/basic");
           http.post(ur, body: "{ \"brightness\": $brightness }");
         }
