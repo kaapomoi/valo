@@ -44,7 +44,7 @@ class _MyHomePageState extends State<MyHomePage> {
   late double brightness = 255;
   List<Color> generatedColors = <Color>[];
   int lightingMode = 1;
-  String ip = "192.168.50.10:80";
+  List<String> ips = <String>["192.168.50.10:80", "192.168.50.11:80"];
 
   TimeOfDay _time = const TimeOfDay(hour: 6, minute: 30);
 
@@ -56,10 +56,11 @@ class _MyHomePageState extends State<MyHomePage> {
   void initState() {
     super.initState();
     controller = TextEditingController();
-    controller.text = ip;
     // Get brightness
-    Uri ur = Uri.http(ip, "/api/v1/basic/");
-    http.get(ur);
+    for(var i = 0; i < ips.length; i++){
+      Uri ur = Uri.http(ips[i], "/api/v1/basic/");
+      http.get(ur);
+    }
   }
 
   @override
@@ -82,8 +83,10 @@ class _MyHomePageState extends State<MyHomePage> {
         lightingMode = 1;
       });
     }
-    Uri ur = Uri.http(ip, "/api/v1/basic");
-    http.post(ur, body: "{ 'mode': ${lightingMode.toString()} }");
+    for(var i = 0; i < ips.length; i++){
+      Uri ur = Uri.http(ips[i], "/api/v1/basic/");
+      http.post(ur, body: "{ 'mode': ${lightingMode.toString()} }");
+    }
   }
 
   void _selectTime() async {
@@ -98,8 +101,9 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   void sendAlarmApiRequest() async {
-    Uri ur = Uri.http(ip, "/api/v1/alarm");
-    final Response response = await http.post(ur,
+    for(var i = 0; i < ips.length; i++){
+      Uri ur = Uri.http(ips[i], "/api/v1/alarm");
+      final Response response = await http.post(ur,
         body:
             "{ 'alarm_hours': ${_time.hour.toString()}, 'alarm_minutes': ${_time.minute.toString()}, 'alarm_enabled': 1 }");
 
@@ -114,6 +118,8 @@ class _MyHomePageState extends State<MyHomePage> {
             title: Text(response.body),
           );
         });
+    }
+
   }
 
   Future<dynamic> fetchApiData(Uri ur) async {
@@ -185,8 +191,11 @@ class _MyHomePageState extends State<MyHomePage> {
                 setState(() {
                   lightingMode = 0;
                 });
-                Uri ur = Uri.http(ip, "/api/v1/basic");
-                http.post(ur, body: "{ \"mode\": 0 }");
+
+                for(var i = 0; i < ips.length; i++){
+                  Uri ur = Uri.http(ips[i], "/api/v1/basic/");
+                  http.post(ur, body: "{ \"mode\": 0 }");
+                }
               },
               child: const Icon(Icons.power_off_sharp),
             ),
@@ -231,17 +240,19 @@ class _MyHomePageState extends State<MyHomePage> {
               }),
             ),
             onPressed: () {
-              Uri ur = Uri.http(ip, "/api/v1/basic");
+              for(var i = 0; i < ips.length; i++){
+                Uri ur = Uri.http(ips[i], "/api/v1/basic/");
 
-              String body = "{'color': '$colorStr'";
-              if (lightingMode == 0) {
-                setState(() {
-                  lightingMode = 1;
-                });
-                body += ", 'mode': ${lightingMode.toString()}";
+                String body = "{'color': '$colorStr'";
+                if (lightingMode == 0) {
+                  setState(() {
+                    lightingMode = 1;
+                  });
+                  body += ", 'mode': ${lightingMode.toString()}";
+                }
+                body += "}";
+                http.post(ur, body: body);
               }
-              body += "}";
-              http.post(ur, body: body);
             },
             child: Text(
                 style: TextStyle(
@@ -299,8 +310,10 @@ class _MyHomePageState extends State<MyHomePage> {
     if (newBrightness != null) {
       setState(() {
         brightness = newBrightness;
-        Uri ur = Uri.http(ip, "/api/v1/basic");
-        http.post(ur, body: "{ \"brightness\": $brightness }");
+        for(var i = 0; i < ips.length; i++){
+          Uri ur = Uri.http(ips[i], "/api/v1/basic");
+          http.post(ur, body: "{ \"brightness\": $brightness }");
+        }
       });
     }
   }
