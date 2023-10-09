@@ -1,12 +1,16 @@
 import 'dart:convert';
 import 'dart:math';
+import 'dart:io';
+import 'light.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:http/http.dart' as http;
-import 'package:http/http.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:simple_gesture_detector/simple_gesture_detector.dart';
+import 'package:network_info_plus/network_info_plus.dart';
+import 'package:lan_scanner/lan_scanner.dart';
 
 void main() {
   SystemChrome.setSystemUIOverlayStyle(
@@ -42,13 +46,53 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   late double brightness = 255;
+  late String myIP;
   List<Color> generatedColors = <Color>[];
   int lightingMode = 1;
-  List<String> ips = <String>["192.168.50.10:80", "192.168.50.11:80"];
+  List<Light> lights = [];
 
   TimeOfDay _time = const TimeOfDay(hour: 6, minute: 30);
 
   Color pickerColor = const Color(0xffffeedd);
+
+  void startup() async {
+    if (await Permission.locationWhenInUse.request().isGranted) {
+      stdout.writeln("We are in!");
+    }
+
+    var res = await NetworkInfo().getWifiIP();
+    myIP = res.toString();
+    stdout.writeln(myIP);
+
+    String subnet = ipToCSubnet(myIP);
+    final scanner = LanScanner();
+
+    final List<Host> hosts = await scanner.quickIcmpScanAsync(subnet);
+
+    /// For every IP in subnet, ping.
+    for (var i = 0; i < hosts.length; i++) {
+      String ipToPing = hosts[i].internetAddress.address;
+      if (ipToPing == myIP) {
+        continue;
+      }
+      stdout.writeln("Pinging $ipToPing");
+      Uri ur = Uri.http(ipToPing, "/api/v1/ping");
+      try {
+        final http.Response response =
+            await http.get(ur).timeout(const Duration(seconds: 3));
+        if (response.body.startsWith("valo@")) {
+          stdout.writeln("Found ${response.body}");
+          setState(() {
+            lights.add(Light(ipToPing));
+          });
+        } else {
+          stdout.writeln("No resp from $ipToPing");
+        }
+      } catch (e) {
+        stdout.writeln("Exception $e from $ipToPing");
+      }
+    }
+  }
 
   /// Text controller
   late TextEditingController controller;
@@ -56,11 +100,7 @@ class _MyHomePageState extends State<MyHomePage> {
   void initState() {
     super.initState();
     controller = TextEditingController();
-    // Get brightness
-    for (var i = 0; i < ips.length; i++) {
-      Uri ur = Uri.http(ips[i], "/api/v1/basic");
-      http.get(ur);
-    }
+    startup();
   }
 
   @override
@@ -83,9 +123,8 @@ class _MyHomePageState extends State<MyHomePage> {
         lightingMode = 1;
       });
     }
-    for (var i = 0; i < ips.length; i++) {
-      Uri ur = Uri.http(ips[i], "/api/v1/basic");
-      http.post(ur, body: "{ 'mode': ${lightingMode.toString()} }");
+    for (final light in lights) {
+      light.post("/api/v1/basic", "{ 'mode': ${lightingMode.toString()} }");
     }
   }
 
@@ -101,11 +140,9 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   void sendAlarmApiRequest() async {
-    for (var i = 0; i < ips.length; i++) {
-      Uri ur = Uri.http(ips[i], "/api/v1/alarm");
-      final Response response = await http.post(ur,
-          body:
-              "{ 'alarm_hours': ${_time.hour.toString()}, 'alarm_minutes': ${_time.minute.toString()}, 'alarm_enabled': 1 }");
+    for (final light in lights) {
+      final http.Response response = await light.post("/api/v1/alarm",
+          "{ 'alarm_hours': ${_time.hour.toString()}, 'alarm_minutes': ${_time.minute.toString()}, 'alarm_enabled': 1 }");
 
       /// TODO: Fix this dialog
       showDialog(
@@ -146,18 +183,40 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
+  List<Widget> createLightActivationListItems() {
+    List<Widget> lightWidgets = [
+      const DrawerHeader(
+        child: Text('Lights'),
+      ),
+    ];
+
+    for (final light in lights) {
+      stdout.writeln("Created a list item");
+      lightWidgets.add(ListTile(
+          title: light.isActive()
+              ? Text("${light.id()} ACTIVE")
+              : Text("${light.id()} INACTIVE"),
+          selected: light.isActive(),
+          onTap: () {
+            setState(() {
+              light.toggleActive();
+            });
+          }));
+    }
+
+    return lightWidgets;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SimpleGestureDetector(
-        onHorizontalSwipe: _onHorizontalSwipe,
-        swipeConfig: const SimpleSwipeConfig(
-          verticalThreshold: 40.0,
-          horizontalThreshold: 40.0,
-          swipeDetectionBehavior: SwipeDetectionBehavior.continuousDistinct,
-        ),
-        child: _showColors(),
-      ),
+      body: _showColors(),
+      drawerEdgeDragWidth: MediaQuery.of(context).size.width,
+      drawer: Drawer(
+          child: ListView(
+        padding: EdgeInsets.zero,
+        children: createLightActivationListItems(),
+      )),
       persistentFooterButtons: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -178,7 +237,7 @@ class _MyHomePageState extends State<MyHomePage> {
             //   child: const Icon(Icons.wifi_sharp),
             // ),
             ElevatedButton(
-              onPressed: openColorPickerDialog,
+              onPressed: openLightActivationDialog,
               child: const Icon(Icons.color_lens_sharp),
             ),
             ElevatedButton(
@@ -191,9 +250,8 @@ class _MyHomePageState extends State<MyHomePage> {
                   lightingMode = 0;
                 });
 
-                for (var i = 0; i < ips.length; i++) {
-                  Uri ur = Uri.http(ips[i], "/api/v1/basic");
-                  http.post(ur, body: "{ 'mode': 0 }");
+                for (final light in lights) {
+                  light.post("/api/v1/basic", "{ 'mode': 0 }");
                 }
               },
               child: const Icon(Icons.power_off_sharp),
@@ -239,9 +297,7 @@ class _MyHomePageState extends State<MyHomePage> {
               }),
             ),
             onPressed: () {
-              for (var i = 0; i < ips.length; i++) {
-                Uri ur = Uri.http(ips[i], "/api/v1/basic");
-
+              for (final light in lights) {
                 String body = "{'color': '$colorStr'";
                 if (lightingMode == 0) {
                   setState(() {
@@ -250,7 +306,7 @@ class _MyHomePageState extends State<MyHomePage> {
                   body += ", 'mode': ${lightingMode.toString()}";
                 }
                 body += "}";
-                http.post(ur, body: body);
+                light.post("/api/v1/basic", body);
               }
             },
             child: Text(
@@ -272,6 +328,28 @@ class _MyHomePageState extends State<MyHomePage> {
     });
   }
 
+  List<Widget> createLightActivationButtons() {
+    List<Widget> lightWidgets = [];
+
+    for (final light in lights) {
+      lightWidgets.add(ElevatedButton(
+          onPressed: () {
+            setState(() {
+              light.toggleActive();
+            });
+          },
+          child: light.isActive() ? const Text("ON") : const Text("OFF")));
+    }
+
+    return lightWidgets;
+  }
+
+  void openLightActivationDialog() => showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+            title: const Text(""), actions: createLightActivationButtons()),
+      );
+
   void openColorPickerDialog() => showDialog(
         context: context,
         builder: (context) => AlertDialog(
@@ -292,9 +370,8 @@ class _MyHomePageState extends State<MyHomePage> {
                     .toRadixString(16)
                     .substring(2)
                     .toUpperCase();
-                for (var i = 0; i < ips.length; i++) {
-                  Uri ur = Uri.http(ips[i], "/api/v1/basic");
-                  http.post(ur, body: "{ 'color': '$pickerColorStr' }");
+                for (final light in lights) {
+                  light.post("/api/v1/basic", "{ 'color': '$pickerColorStr' }");
                 }
               },
               child: const Text("Apply"),
@@ -311,9 +388,8 @@ class _MyHomePageState extends State<MyHomePage> {
     if (newBrightness != null) {
       setState(() {
         brightness = newBrightness;
-        for (var i = 0; i < ips.length; i++) {
-          Uri ur = Uri.http(ips[i], "/api/v1/basic");
-          http.post(ur, body: "{ \"brightness\": $brightness }");
+        for (final light in lights) {
+          light.post("/api/v1/basic", "{ \"brightness\": $brightness }");
         }
       });
     }
