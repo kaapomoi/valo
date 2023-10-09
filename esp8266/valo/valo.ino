@@ -34,7 +34,7 @@ const uint8_t PROGMEM gamma8[] = {
     208, 210, 212, 213, 215, 217, 218, 220, 222, 224, 225, 227, 229, 230, 232, 234, 236, 237, 239,
     241, 243, 244, 246, 248, 250, 251, 253, 255};
 
-#define NUM_LEDS 60
+#define NUM_LEDS 12
 CRGB leds[NUM_LEDS];
 
 #define FRAMES_PER_SECOND 100
@@ -229,9 +229,13 @@ void handleColorApiV1Alarm()
 
 void setGammaCorrectedLedColor(CRGB& led, CRGB const& color)
 {
+    led = color;
+
+#if 0
     led.r = pgm_read_byte(&gamma8[color.r]);
     led.g = pgm_read_byte(&gamma8[color.g]);
     led.b = pgm_read_byte(&gamma8[color.b]);
+#endif
 }
 
 void updateLeds()
@@ -333,6 +337,8 @@ void setup(void)
     Serial.println(WiFi.localIP());
 
     // Initialize server routings
+    server.on("/api/v1/ping", HTTP_POST,
+              []() { server.send(200, "text/plain", "valo@" + WiFi.localIP()); });
     server.on("/api/v1/basic", HTTP_POST, handleColorApiV1Basic);
     server.on("/api/v1/multi", HTTP_POST, handleColorApiV1Multi);
     server.on("/api/v1/wakeup", HTTP_POST, handleColorApiV1Wakeup);
