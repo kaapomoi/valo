@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math';
 import 'dart:io';
 import 'light.dart';
+import 'brightness_dialog.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -54,26 +55,27 @@ class _MyHomePageState extends State<MyHomePage> {
   TimeOfDay _time = const TimeOfDay(hour: 6, minute: 30);
 
   Color pickerColor = const Color(0xffffeedd);
+  TextStyle textStyle = const TextStyle(
+    letterSpacing: 2,
+    fontWeight: FontWeight.w100,
+  );
 
-  void startup() async {
+  void scanForLights() async {
     if (await Permission.locationWhenInUse.request().isGranted) {
-      stdout.writeln("We are in!");
+      stdout.writeln("Location permission granted!");
     }
 
     var res = await NetworkInfo().getWifiIP();
     myIP = res.toString();
     stdout.writeln(myIP);
 
-    String subnet = ipToCSubnet(myIP);
-    final scanner = LanScanner();
+    final List<Host> hosts =
+        await LanScanner().quickIcmpScanAsync(ipToCSubnet(myIP));
 
-    final List<Host> hosts = await scanner.quickIcmpScanAsync(subnet);
-
-    /// For every IP in subnet, ping.
-    for (var i = 0; i < hosts.length; i++) {
-      String ipToPing = hosts[i].internetAddress.address;
+    Future.forEach<Host>(hosts, (host) async {
+      String ipToPing = host.internetAddress.address;
       if (ipToPing == myIP) {
-        continue;
+        return;
       }
       stdout.writeln("Pinging $ipToPing");
       Uri ur = Uri.http(ipToPing, "/api/v1/ping");
@@ -91,7 +93,7 @@ class _MyHomePageState extends State<MyHomePage> {
       } catch (e) {
         stdout.writeln("Exception $e from $ipToPing");
       }
-    }
+    });
   }
 
   /// Text controller
@@ -100,17 +102,13 @@ class _MyHomePageState extends State<MyHomePage> {
   void initState() {
     super.initState();
     controller = TextEditingController();
-    startup();
+    scanForLights();
   }
 
   @override
   void dispose() {
     controller.dispose();
     super.dispose();
-  }
-
-  void _onHorizontalSwipe(SwipeDirection direction) {
-    _updateColor();
   }
 
   void _toggleLightingMode() {
@@ -139,22 +137,26 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
+  Future showSuccessDialog(Light light, String resp) async {
+    return showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(
+            "${light.id()} >> $resp",
+            style: textStyle.copyWith(fontSize: 16),
+          ),
+        );
+      },
+    );
+  }
+
   void sendAlarmApiRequest() async {
     for (final light in lights) {
       final http.Response response = await light.post("/api/v1/alarm",
           "{ 'alarm_hours': ${_time.hour.toString()}, 'alarm_minutes': ${_time.minute.toString()}, 'alarm_enabled': 1 }");
 
-      /// TODO: Fix this dialog
-      showDialog(
-          context: context,
-          builder: (context) {
-            Future.delayed(const Duration(seconds: 5), () {
-              Navigator.of(context).pop(true);
-            });
-            return AlertDialog(
-              title: Text(response.body),
-            );
-          });
+      showSuccessDialog(light, response.body);
     }
   }
 
@@ -176,8 +178,6 @@ class _MyHomePageState extends State<MyHomePage> {
     switch (lightingMode) {
       case 1:
         return const Icon(Icons.scatter_plot_sharp);
-      case 2:
-        return const Icon(Icons.lightbulb);
       default:
         return const Icon(Icons.lightbulb);
     }
@@ -185,23 +185,68 @@ class _MyHomePageState extends State<MyHomePage> {
 
   List<Widget> createLightActivationListItems() {
     List<Widget> lightWidgets = [
-      const DrawerHeader(
-        child: Text('Lights'),
+      DrawerHeader(
+        child: Text(
+          'valo',
+          style: TextStyle(
+            color: Colors.white.withAlpha(128),
+            fontSize: 80.0,
+            letterSpacing: 4,
+            fontWeight: FontWeight.w100,
+          ),
+        ),
       ),
     ];
 
     for (final light in lights) {
       stdout.writeln("Created a list item");
-      lightWidgets.add(ListTile(
-          title: light.isActive()
-              ? Text("${light.id()} ACTIVE")
-              : Text("${light.id()} INACTIVE"),
+
+      lightWidgets.add(
+        ListTile(
+          title: Text(light.id(),
+              style: textStyle.copyWith(color: Colors.white.withAlpha(128))),
+          leading: SizedBox(
+              width: 48,
+              child: light.isActive()
+                  ? Text("mod", style: textStyle.copyWith(fontSize: 12))
+                  : Text("const", style: textStyle)),
+          trailing: SizedBox(
+            width: 32,
+            height: 32,
+            child: ElevatedButton(
+              style: ButtonStyle(
+                fixedSize: const MaterialStatePropertyAll(Size(24, 24)),
+                iconSize: const MaterialStatePropertyAll(16),
+                iconColor: const MaterialStatePropertyAll(Color(0xff121212)),
+                padding: const MaterialStatePropertyAll(EdgeInsets.zero),
+                backgroundColor: MaterialStatePropertyAll(light.color),
+              ),
+              onPressed: () {
+                setState(() {
+                  light.toggleOnOff();
+                });
+              },
+              child: Icon(light.lightingMode != LightingMode.off
+                  ? Icons.power_off_outlined
+                  : Icons.lightbulb),
+            ),
+          ),
           selected: light.isActive(),
           onTap: () {
             setState(() {
               light.toggleActive();
             });
-          }));
+          },
+          onLongPress: () async {
+            var newName = await showTextInputDialog(context, light);
+            if (newName != null) {
+              setState(() {
+                light.name = newName;
+              });
+            }
+          },
+        ),
+      );
     }
 
     return lightWidgets;
@@ -213,45 +258,30 @@ class _MyHomePageState extends State<MyHomePage> {
       body: _showColors(),
       drawerEdgeDragWidth: MediaQuery.of(context).size.width,
       drawer: Drawer(
-          child: ListView(
-        padding: EdgeInsets.zero,
-        children: createLightActivationListItems(),
-      )),
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 96, 16, 16),
+          children: createLightActivationListItems(),
+        ),
+      ),
       persistentFooterButtons: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          crossAxisAlignment: CrossAxisAlignment.end,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: <Widget>[
             ElevatedButton(
               onPressed: _toggleLightingMode,
               child: getIcon(),
             ),
-            // FloatingActionButton(
-            //   backgroundColor: Colors.white.withAlpha(100),
-            //   tooltip: 'Change target IP address',
-            //   onPressed: () async {
-            //     final newIp = await openIpChangeDialog();
-            //     if (newIp == null || newIp.isEmpty) return;
-            //     setState(() => ip = newIp);
-            //   },
-            //   child: const Icon(Icons.wifi_sharp),
-            // ),
-            ElevatedButton(
-              onPressed: openLightActivationDialog,
-              child: const Icon(Icons.color_lens_sharp),
-            ),
             ElevatedButton(
               onPressed: _selectTime,
-              child: const Icon(Icons.api),
+              child: const Icon(Icons.alarm),
             ),
             ElevatedButton(
               onPressed: () {
-                setState(() {
-                  lightingMode = 0;
-                });
-
                 for (final light in lights) {
-                  light.post("/api/v1/basic", "{ 'mode': 0 }");
+                  setState(() {
+                    light.turnOff();
+                  });
                 }
               },
               child: const Icon(Icons.power_off_sharp),
@@ -260,7 +290,7 @@ class _MyHomePageState extends State<MyHomePage> {
               onPressed: () async {
                 openBrightnessSliderDialog();
               },
-              child: const Icon(Icons.brightness_1),
+              child: const Icon(Icons.sunny),
             ),
           ],
         ),
@@ -298,15 +328,21 @@ class _MyHomePageState extends State<MyHomePage> {
             ),
             onPressed: () {
               for (final light in lights) {
-                String body = "{'color': '$colorStr'";
-                if (lightingMode == 0) {
-                  setState(() {
-                    lightingMode = 1;
-                  });
-                  body += ", 'mode': ${lightingMode.toString()}";
-                }
-                body += "}";
-                light.post("/api/v1/basic", body);
+                setState(() {
+                  String body = "{'color': '$colorStr'";
+                  if (light.lightingMode == LightingMode.off) {
+                    setState(() {
+                      light.lightingMode = LightingMode.solid;
+                    });
+                    body += ", 'mode': ${light.lightingMode.index.toString()}";
+                  }
+                  body += "}";
+
+                  light.setColorIfActive(color);
+
+                  /// TODO: pass Color into post instead, or create a setColor
+                  light.post("/api/v1/basic", body);
+                });
               }
             },
             child: Text(
@@ -322,63 +358,40 @@ class _MyHomePageState extends State<MyHomePage> {
     );
   }
 
-  void _updateColor() {
-    setState(() {
-      generatedColors.clear();
-    });
-  }
-
-  List<Widget> createLightActivationButtons() {
-    List<Widget> lightWidgets = [];
-
-    for (final light in lights) {
-      lightWidgets.add(ElevatedButton(
-          onPressed: () {
-            setState(() {
-              light.toggleActive();
-            });
-          },
-          child: light.isActive() ? const Text("ON") : const Text("OFF")));
-    }
-
-    return lightWidgets;
-  }
-
-  void openLightActivationDialog() => showDialog(
+  Future<String?> showTextInputDialog(BuildContext context, Light light) async {
+    final textFieldController = TextEditingController();
+    return showDialog(
         context: context,
-        builder: (context) => AlertDialog(
-            title: const Text(""), actions: createLightActivationButtons()),
-      );
-
-  void openColorPickerDialog() => showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text("Pick a color"),
-          content: SingleChildScrollView(
-            child: ColorPicker(
-              pickerColor: pickerColor,
-              onColorChanged: (Color value) {
-                setState(() => pickerColor = value);
-              },
+        builder: (context) {
+          return AlertDialog(
+            title: Text(
+              'set a name',
+              style: textStyle,
             ),
-          ),
-          actions: <Widget>[
-            ElevatedButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                var pickerColorStr = pickerColor.value
-                    .toRadixString(16)
-                    .substring(2)
-                    .toUpperCase();
-                for (final light in lights) {
-                  light.post("/api/v1/basic", "{ 'color': '$pickerColorStr' }");
-                }
-              },
-              child: const Text("Apply"),
+            content: TextField(
+              controller: textFieldController,
+              decoration: InputDecoration(
+                hintText: light.id(),
+                hintStyle: textStyle,
+              ),
             ),
-          ],
-        ),
-      );
+            actions: <Widget>[
+              ElevatedButton(
+                child: const Text("cancel"),
+                onPressed: () => setState(() {
+                  Navigator.pop(context);
+                }),
+              ),
+              ElevatedButton(
+                child: const Text('ok'),
+                onPressed: () => setState(() {
+                  Navigator.pop(context, textFieldController.text);
+                }),
+              ),
+            ],
+          );
+        });
+  }
 
   void openBrightnessSliderDialog() async {
     final newBrightness = await showDialog(
@@ -393,64 +406,5 @@ class _MyHomePageState extends State<MyHomePage> {
         }
       });
     }
-  }
-
-  Future<String?> openIpChangeDialog() => showDialog<String>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text("Target IP address"),
-          content: TextField(
-            autofocus: true,
-            decoration: const InputDecoration(hintText: "Insert IP and port"),
-            controller: controller,
-            onSubmitted: (_) => submitNewIpAddress(),
-          ),
-          actions: [
-            TextButton(
-                onPressed: submitNewIpAddress, child: const Text("Apply"))
-          ],
-        ),
-      );
-
-  void submitNewIpAddress() {
-    Navigator.of(context).pop(controller.text);
-  }
-}
-
-class BrightnessChangeDialog extends StatefulWidget {
-  final double initialBrightness;
-
-  const BrightnessChangeDialog({super.key, required this.initialBrightness});
-
-  @override
-  State<BrightnessChangeDialog> createState() => _BrightnessChangeDialogState();
-}
-
-class _BrightnessChangeDialogState extends State<BrightnessChangeDialog> {
-  late double brightness;
-
-  @override
-  void initState() {
-    super.initState();
-    brightness = widget.initialBrightness;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      alignment: Alignment.bottomCenter,
-      insetPadding: const EdgeInsets.all(24),
-      child: SizedBox(
-        width: MediaQuery.of(context).size.height / 3,
-        height: 72.0,
-        child: Slider(
-          min: 0,
-          max: 255,
-          value: brightness,
-          onChanged: ((value) => setState(() => brightness = value)),
-          onChangeEnd: (newValue) => {Navigator.pop(context, newValue)},
-        ),
-      ),
-    );
   }
 }
