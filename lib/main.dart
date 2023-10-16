@@ -204,7 +204,8 @@ class _MyHomePageState extends State<MyHomePage> {
       lightWidgets.add(
         ListTile(
           title: Text(light.id(),
-              style: textStyle.copyWith(color: Colors.white.withAlpha(128))),
+              style: textStyle.copyWith(
+                  color: Colors.white.withAlpha(128), fontSize: 14)),
           leading: SizedBox(
               width: 48,
               child: light.isActive()
