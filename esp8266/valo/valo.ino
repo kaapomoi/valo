@@ -337,7 +337,7 @@ void setup(void)
     Serial.println(WiFi.localIP());
 
     // Initialize server routings
-    server.on("/api/v1/ping", HTTP_POST,
+    server.on("/api/v1/ping", HTTP_GET,
               []() { server.send(200, "text/plain", "valo@" + WiFi.localIP().toString()); });
     server.on("/api/v1/basic", HTTP_POST, handleColorApiV1Basic);
     server.on("/api/v1/multi", HTTP_POST, handleColorApiV1Multi);
