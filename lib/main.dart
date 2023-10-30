@@ -160,20 +160,6 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
-  Future<dynamic> fetchApiData(Uri ur) async {
-    final response = await http.get(ur);
-
-    if (response.statusCode == 200) {
-      // If the server did return a 200 OK response,
-      // then parse the JSON.
-      return jsonDecode(response.body);
-    } else {
-      // If the server did not return a 200 OK response,
-      // then throw an exception.
-      throw Exception('Failed to get Api response');
-    }
-  }
-
   Icon getIcon() {
     switch (lightingMode) {
       case 1:
