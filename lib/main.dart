@@ -8,10 +8,8 @@ import 'brightness_dialog.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:http/http.dart' as http;
 import 'package:permission_handler/permission_handler.dart';
-import 'package:simple_gesture_detector/simple_gesture_detector.dart';
 import 'package:network_info_plus/network_info_plus.dart';
 import 'package:lan_scanner/lan_scanner.dart';
 
@@ -405,19 +403,13 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   void openWhiteLevelSliderDialog() async {
-    final coldAndWarm = await showDialog(
+    await showDialog(
         context: context,
-        builder: (context) =>
-            WhiteLevelChangeDialog(initialCold: cold, initialWarm: warm));
-    if (coldAndWarm != null) {
-      setState(() {
-        cold = coldAndWarm['cold'];
-        warm = coldAndWarm['warm'];
-        for (final light in lights) {
-          light.post("/api/v1/white", "{ \"cold\": $cold, \"warm\": $warm}");
-        }
-      });
-    }
+        builder: (context) => SpecialChangeDialog(
+              initialFirst: cold,
+              initialSecond: warm,
+              lights: lights,
+            ));
   }
 
   void openBrightnessSliderDialog() async {

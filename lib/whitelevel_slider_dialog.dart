@@ -1,59 +1,72 @@
 import 'package:flutter/material.dart';
+import 'package:valo/light.dart';
 
-class WhiteLevelChangeDialog extends StatefulWidget {
-  final double initialCold;
-  final double initialWarm;
+class SpecialChangeDialog extends StatefulWidget {
+  final double initialFirst;
+  final double initialSecond;
+  final List<Light> lights;
 
-  const WhiteLevelChangeDialog(
-      {super.key, required this.initialCold, required this.initialWarm});
+  const SpecialChangeDialog(
+      {super.key,
+      required this.initialFirst,
+      required this.initialSecond,
+      required this.lights});
 
   @override
-  State<WhiteLevelChangeDialog> createState() => _WhiteLevelChangeDialogState();
+  State<SpecialChangeDialog> createState() => _SpecialChangeDialogState();
 }
 
-class _WhiteLevelChangeDialogState extends State<WhiteLevelChangeDialog> {
-  late double cold;
-  late double warm;
+class _SpecialChangeDialogState extends State<SpecialChangeDialog> {
+  late double first;
+  late double second;
+  late List<Light> lights;
 
   @override
   void initState() {
     super.initState();
-    cold = widget.initialCold;
-    warm = widget.initialWarm;
+    first = widget.initialFirst;
+    second = widget.initialSecond;
+    lights = widget.lights;
   }
 
   @override
   Widget build(BuildContext context) {
     return Dialog(
+      alignment: Alignment.lerp(Alignment.center, Alignment.bottomCenter, 0.5),
       child: SizedBox(
-        height: 144.0,
+        width: MediaQuery.of(context).size.width * 0.6,
+        height: 128.0,
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.end,
-          crossAxisAlignment: CrossAxisAlignment.end,
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Slider(
               min: 0,
               max: 255,
-              value: cold,
-              onChanged: ((value) => setState(() => cold = value)),
+              value: first,
+              onChanged: ((value) => setState(() => first = value)),
               onChangeEnd: (value) => {
-                setState(() => cold = value),
+                setState(() {
+                  first = value;
+                  for (final light in lights) {
+                    light.post("/api/v1/special", "{ \"first\": $first }");
+                  }
+                }),
               },
             ),
             Slider(
               min: 0,
               max: 255,
-              value: warm,
-              onChanged: ((value) => setState(() => warm = value)),
+              value: second,
+              onChanged: ((value) => setState(() => second = value)),
               onChangeEnd: (value) => {
-                setState(() => warm = value),
+                setState(() {
+                  second = value;
+                  for (final light in lights) {
+                    light.post("/api/v1/special", "{ \"second\": $second }");
+                  }
+                }),
               },
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                Navigator.pop(context, {'cold': cold, 'warm': warm});
-              },
-              child: const Icon(Icons.done),
             ),
           ],
         ),

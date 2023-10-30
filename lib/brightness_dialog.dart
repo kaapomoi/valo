@@ -23,7 +23,7 @@ class _BrightnessChangeDialogState extends State<BrightnessChangeDialog> {
     return Dialog(
       alignment: Alignment.lerp(Alignment.center, Alignment.bottomCenter, 0.5),
       child: SizedBox(
-        width: MediaQuery.of(context).size.height / 3,
+        width: MediaQuery.of(context).size.width * 0.6,
         height: 80.0,
         child: Slider(
           min: 0,
