@@ -149,9 +149,12 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   void sendAlarmApiRequest() async {
+    /// TODO: Remove this when reprogramming Nodes.
+    int adjustedHours = _time.hour < 23 ? _time.hour + 1 : 0;
+
     for (final light in lights) {
       final http.Response response = await light.post("/api/v1/alarm",
-          "{ 'alarm_hours': ${_time.hour.toString()}, 'alarm_minutes': ${_time.minute.toString()}, 'alarm_enabled': 1 }");
+          "{ 'alarm_hours': ${adjustedHours.toString()}, 'alarm_minutes': ${_time.minute.toString()}, 'alarm_enabled': 1 }");
 
       showSuccessDialog(light, response.body);
     }
