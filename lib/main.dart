@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:math';
 import 'dart:io';
+import 'package:valo/whitelevel_slider_dialog.dart';
+
 import 'light.dart';
 import 'brightness_dialog.dart';
 
@@ -47,6 +49,8 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   late double brightness = 255;
+  late double cold = 128;
+  late double warm = 128;
   late String myIP;
   List<Color> generatedColors = <Color>[];
   int lightingMode = 1;
@@ -289,6 +293,12 @@ class _MyHomePageState extends State<MyHomePage> {
             ),
             ElevatedButton(
               onPressed: () async {
+                openWhiteLevelSliderDialog();
+              },
+              child: const Icon(Icons.flare),
+            ),
+            ElevatedButton(
+              onPressed: () async {
                 openBrightnessSliderDialog();
               },
               child: const Icon(Icons.sunny),
@@ -392,6 +402,22 @@ class _MyHomePageState extends State<MyHomePage> {
             ],
           );
         });
+  }
+
+  void openWhiteLevelSliderDialog() async {
+    final coldAndWarm = await showDialog(
+        context: context,
+        builder: (context) =>
+            WhiteLevelChangeDialog(initialCold: cold, initialWarm: warm));
+    if (coldAndWarm != null) {
+      setState(() {
+        cold = coldAndWarm['cold'];
+        warm = coldAndWarm['warm'];
+        for (final light in lights) {
+          light.post("/api/v1/white", "{ \"cold\": $cold, \"warm\": $warm}");
+        }
+      });
+    }
   }
 
   void openBrightnessSliderDialog() async {

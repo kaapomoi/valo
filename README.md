@@ -48,4 +48,10 @@ An example of external usage is located here: [wakeup-light](https://github.com/
     "alarm_minutes": 15  /// Set which minute to ring the alarm at (0-59) 
 }
 
+/api/v1/white:
+{
+    "cold": 128,         /// 0-255
+    "warm": 64           /// 0-255
+}
+
 ```
