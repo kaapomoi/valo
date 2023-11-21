@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 enum LightingMode { off, solid, sparkle }
 
 class Light {
-  final String ip;
+  late String ip;
   late String name;
   late LightingMode lightingMode;
   late Color color;
@@ -14,6 +14,17 @@ class Light {
     lightingMode = LightingMode.solid;
     name = ip;
     color = Colors.white;
+  }
+
+  Light.complete(String serializedString) {
+    final List<String> variables = serializedString.split(";");
+
+    ip = variables[0];
+    name = variables[1];
+    lightingMode = LightingMode.values
+        .firstWhere((element) => element.toString() == variables[2]);
+    color = Color(int.parse(variables[3], radix: 16));
+    active = bool.parse(variables[4]);
   }
 
   Future<http.Response> toggleOnOff() async {
@@ -58,5 +69,11 @@ class Light {
     RegExp reg = RegExp(r"\d{1,3}$");
     int ind = ip.lastIndexOf(reg);
     return ip.substring(ind - 2, ip.length);
+  }
+
+  String getSerializedString() {
+    String colorString = color.toString();
+    String valueString = colorString.split('(0x')[1].split(')')[0];
+    return "$ip;$name;${lightingMode.toString()};$valueString;${active.toString()}";
   }
 }
