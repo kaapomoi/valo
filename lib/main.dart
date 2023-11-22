@@ -368,16 +368,12 @@ class _MyHomePageState extends State<MyHomePage> {
                 setState(() {
                   String body = "{'color': '$colorStr'";
                   if (light.lightingMode == LightingMode.off) {
-                    setState(() {
-                      light.lightingMode = LightingMode.solid;
-                    });
+                    light.lightingMode = LightingMode.solid;
                     body += ", 'mode': ${light.lightingMode.index.toString()}";
                   }
                   body += "}";
 
                   light.setColorIfActive(color);
-
-                  /// TODO: pass Color into post instead, or create a setColor
                   light.post("/api/v1/basic", body);
                 });
               }
