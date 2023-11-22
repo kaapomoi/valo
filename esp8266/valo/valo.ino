@@ -295,6 +295,7 @@ void execute_wakeup()
         }
         else {
             Serial.println("Current color is target color");
+            alarm_enabled = false;
             led_mode = LedMode::solid;
         }
 
@@ -395,7 +396,9 @@ void loop(void)
 
         prev_time = millis();
         if (led_mode == LedMode::wakeup) {
-            execute_wakeup();
+            if (alarm_enabled) {
+                execute_wakeup();
+            }
         }
         else {
             // Update LEDs
