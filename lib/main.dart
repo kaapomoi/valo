@@ -1,7 +1,7 @@
-import 'dart:convert';
 import 'dart:math';
 import 'dart:io';
 import 'package:valo/whitelevel_slider_dialog.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'light.dart';
 import 'brightness_dialog.dart';
@@ -87,7 +87,10 @@ class _MyHomePageState extends State<MyHomePage> {
         if (response.body.startsWith("valo@")) {
           stdout.writeln("Found ${response.body}");
           setState(() {
-            lights.add(Light(ipToPing));
+            /// Don't add duplicate lights
+            if (lights.every((light) => light.ip != ipToPing)) {
+              lights.add(Light(ipToPing));
+            }
           });
         } else {
           stdout.writeln("No resp from $ipToPing");
@@ -104,6 +107,7 @@ class _MyHomePageState extends State<MyHomePage> {
   void initState() {
     super.initState();
     controller = TextEditingController();
+    loadLightsFromPersistency();
     scanForLights();
   }
 
@@ -139,6 +143,44 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
+  void saveLightsToPersistency() async {
+    if (lights.isNotEmpty) {
+      List<String> serializedStrings = [];
+
+      for (final light in lights) {
+        serializedStrings.add(light.getSerializedString());
+        stdout.writeln("Save lights.${serializedStrings.last}");
+      }
+
+      stdout.writeln("Save lights.${serializedStrings.length}");
+
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+
+      await prefs.setStringList('lights', serializedStrings);
+    }
+  }
+
+  Future<void> loadLightsFromPersistency() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+
+    List<Light> newLights = [];
+
+    final List<String>? serializedStrings = prefs.getStringList('lights');
+
+    for (final serializedString in serializedStrings!) {
+      stdout.writeln("Load lights. str: $serializedString");
+      newLights.add(Light.complete(serializedString));
+    }
+
+    stdout.writeln("Load lights.${newLights.length}");
+    lights = newLights;
+  }
+
+  void resetPersistentStorage() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.remove('lights');
+  }
+
   Future showSuccessDialog(Light light, String resp) async {
     return showDialog(
       context: context,
@@ -154,25 +196,14 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   void sendAlarmApiRequest() async {
+    /// TODO: Remove this when reprogramming Nodes.
+    int adjustedHours = _time.hour < 23 ? _time.hour + 1 : 0;
+
     for (final light in lights) {
       final http.Response response = await light.post("/api/v1/alarm",
-          "{ 'alarm_hours': ${_time.hour.toString()}, 'alarm_minutes': ${_time.minute.toString()}, 'alarm_enabled': 1 }");
+          "{ 'alarm_hours': ${adjustedHours.toString()}, 'alarm_minutes': ${_time.minute.toString()}, 'alarm_enabled': 1 }");
 
       showSuccessDialog(light, response.body);
-    }
-  }
-
-  Future<dynamic> fetchApiData(Uri ur) async {
-    final response = await http.get(ur);
-
-    if (response.statusCode == 200) {
-      // If the server did return a 200 OK response,
-      // then parse the JSON.
-      return jsonDecode(response.body);
-    } else {
-      // If the server did not return a 200 OK response,
-      // then throw an exception.
-      throw Exception('Failed to get Api response');
     }
   }
 
@@ -252,6 +283,8 @@ class _MyHomePageState extends State<MyHomePage> {
       );
     }
 
+    saveLightsToPersistency();
+
     return lightWidgets;
   }
 
@@ -278,6 +311,10 @@ class _MyHomePageState extends State<MyHomePage> {
             ElevatedButton(
               onPressed: _selectTime,
               child: const Icon(Icons.alarm),
+            ),
+            ElevatedButton(
+              onPressed: resetPersistentStorage,
+              child: const Icon(Icons.storage),
             ),
             ElevatedButton(
               onPressed: () {

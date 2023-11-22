@@ -1,12 +1,10 @@
 # valo
 
-An app to control LEDs over Wi-Fi
-
-Swipe left or right to get new colors, or just scroll down endlessly.
+An app to control LEDs over Wi-Fi.
 
 
 ### Setup
-Currently only works with static SSID, password and IP configurations.
+Currently only works with static SSID and password configurations.
 
 
 ### ESP8266 LED API
