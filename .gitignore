@@ -119,3 +119,8 @@ coverage/
 
 
 esp8266/valo/secret.h
+
+./vim/
+linux/
+pubspec.lock
+.metadata
